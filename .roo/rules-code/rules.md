@@ -1,0 +1,1 @@
+- Maintain a file named library.md in the root of the project that you search for and before searching make sure that you check the file and use the library ID already available in the file. Otherwise, search for it.

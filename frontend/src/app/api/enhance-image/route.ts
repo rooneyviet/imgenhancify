@@ -32,8 +32,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Return the response from the provider (e.g., includes requestId)
-    return NextResponse.json(result);
+    // Construct a clear response for the client
+    // providerRawResponse might be large or contain sensitive info not needed by client for polling
+    const clientResponse = {
+      requestId: result.requestId,
+      status: result.status,
+      // enhancedUrl will be undefined if status is IN_QUEUE or IN_PROGRESS
+      enhancedUrl: result.enhancedImageUrl,
+      // Extract status_url and determine provider_name for polling
+      status_url: result.providerRawResponse?.status_url || null,
+      provider_name: result.providerRawResponse?.status_url
+        ? ImageEnhancementFactory.determineProviderType()
+        : null,
+      // Optionally, include a subset of providerRawResponse if useful and safe
+      // provider_details: { queue_position: result.providerRawResponse?.queue_position }
+    };
+
+    // If status_url is missing when it's expected (e.g. IN_QUEUE), it's an issue
+    if (
+      (result.status === "IN_QUEUE" || result.status === "IN_PROGRESS") &&
+      !clientResponse.status_url
+    ) {
+      console.error(
+        "Enhancement provider returned queue/progress status without a status_url:",
+        result
+      );
+      return NextResponse.json(
+        {
+          error: "Provider did not return a status URL for polling.",
+          details: result,
+        },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json(clientResponse);
   } catch (error) {
     console.error("Error in /api/enhance-image route:", error);
     let errorMessage = "Unknown error in enhance-image route";

@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback } from "react"; // Removed useEffect as it's no longer used for polling here
 import { useDropzone, FileRejection, Accept } from "react-dropzone-esm";
+import { useImagePolling } from "@/hooks/useImagePolling"; // Import hook mới
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import {
   Card,
@@ -27,19 +28,27 @@ export function ImageUploadArea() {
   const {
     selectedFile,
     previewUrl,
-    error,
+    error, // General error
     isUploading,
     isEnhancing,
+    isPolling, // state from store, will be driven by the hook
     enhancedImageUrl,
     falRequestId,
+    pollingStatusUrl,
+    // pollingProviderName, // Not directly used here, hook handles it
     setSelectedFile,
     setError,
     setIsUploading,
     setIsEnhancing,
+    // setIsPolling, // Managed by hook/store actions
     setEnhancedImageUrl,
     setFalRequestId,
+    // setPollingInfo, // Managed by hook/store actions
     resetState,
+    pollingError, // Polling-specific error from store
   } = useImageUploadStore();
+
+  const { initiatePolling } = useImagePolling();
 
   const handleEnhanceImage = async () => {
     if (!selectedFile) {
@@ -48,9 +57,11 @@ export function ImageUploadArea() {
     }
 
     setIsUploading(true);
-    setError(null);
+    setError(null); // Clear general error
     setEnhancedImageUrl(null);
     setFalRequestId(null);
+    useImageUploadStore.getState().setPollingError(null); // Reset polling error explicitly
+    useImageUploadStore.getState().setIsPolling(false); // Ensure polling is stopped before starting a new one
 
     let uploadedImageUrl: string | null = null;
 
@@ -78,7 +89,6 @@ export function ImageUploadArea() {
       }
       uploadedImageUrl = uploadResult.imageUrl;
       console.log("Uploaded image URL:", uploadedImageUrl);
-      // const providerDeleteUrl = uploadResult.provider_delete_url; // For future use if needed
 
       toast.success("Thành công", { description: "Ảnh gốc đã được tải lên." });
       setIsUploading(false);
@@ -87,7 +97,6 @@ export function ImageUploadArea() {
       // Step 2: Enhance image
       try {
         if (!uploadedImageUrl) {
-          // This check is a safeguard, should have been caught by the check above
           throw new Error(
             "uploadedImageUrl không hợp lệ trước khi gọi enhance."
           );
@@ -106,88 +115,68 @@ export function ImageUploadArea() {
         }
 
         const enhanceResult = await enhanceResponse.json();
+        console.log("Enhance API Result:", enhanceResult);
 
         if (enhanceResult.enhancedUrl) {
           setEnhancedImageUrl(enhanceResult.enhancedUrl);
           toast.success("Thành công", {
             description: "Ảnh đã được xử lý thành công!",
           });
-        } else if (enhanceResult.request_id) {
-          setFalRequestId(enhanceResult.request_id);
-          console.log("Fal.ai Request ID:", enhanceResult.request_id);
+          setIsEnhancing(false);
+        } else if (enhanceResult.status_url && enhanceResult.provider_name) {
+          setFalRequestId(enhanceResult.request_id || null);
+          initiatePolling(
+            enhanceResult.status_url,
+            enhanceResult.provider_name
+          );
+          setIsEnhancing(false);
           toast.info("Đang xử lý", {
             description:
-              "Ảnh của bạn đang được xử lý. Kết quả sẽ có sau ít phút.",
+              "Ảnh của bạn đã được gửi đi xử lý. Hệ thống sẽ tự động kiểm tra trạng thái.",
+          });
+        } else if (
+          enhanceResult.request_id &&
+          enhanceResult.status === "IN_QUEUE" &&
+          enhanceResult.status_url
+        ) {
+          setFalRequestId(enhanceResult.request_id);
+          initiatePolling(enhanceResult.status_url, "fal");
+          setIsEnhancing(false);
+          toast.info("Đang xử lý", {
+            description:
+              "Ảnh của bạn đang được gửi đi xử lý (Fal). Hệ thống sẽ tự động kiểm tra trạng thái.",
           });
         } else {
-          // If no enhancedUrl and no request_id, it's an unexpected success response
           toast.warning("Thông báo", {
             description:
-              "Không nhận được kết quả xử lý hoặc ID yêu cầu từ API.",
+              enhanceResult.error ||
+              "Không nhận được thông tin cần thiết để theo dõi hoặc kết quả xử lý từ API.",
           });
+          setIsEnhancing(false);
         }
       } catch (enhanceError: any) {
-        // Catch errors specifically from the enhance step
         console.error("Lỗi trong quá trình enhance ảnh:", enhanceError);
         setError(enhanceError.message || "Lỗi khi xử lý ảnh.");
         toast.error("Lỗi Enhance", {
           description: enhanceError.message || "Lỗi khi xử lý ảnh.",
         });
-      } finally {
-        setIsEnhancing(false); // Always set enhancing to false after this block
-
-        // Step 3: Delete original image from ImgBB, regardless of enhance success/failure
-        // if (uploadedImageUrl) {
-        //   try {
-        //     const deleteResponse = await fetch("/api/delete-image", {
-        //       method: "POST",
-        //       headers: { "Content-Type": "application/json" },
-        //       body: JSON.stringify({ image_url: uploadedImageUrl }),
-        //     });
-        //     if (!deleteResponse.ok) {
-        //       const errorData = await deleteResponse.json().catch(() => ({}));
-        //       console.error(
-        //         "Lỗi xóa ảnh gốc:",
-        //         errorData.error || "Unknown error"
-        //       );
-        //       toast.warning("Cảnh báo Xóa", {
-        //         description:
-        //           "Không thể xóa ảnh gốc trên server trung gian. " +
-        //           (errorData.error || ""),
-        //       });
-        //     } else {
-        //       console.log("Ảnh gốc đã được xóa khỏi ImgBB.");
-        //     }
-        //   } catch (deleteError: any) {
-        //     console.error("Lỗi gọi API xóa ảnh:", deleteError);
-        //     toast.warning("Cảnh báo Xóa", {
-        //       description:
-        //         "Lỗi khi cố gắng xóa ảnh gốc: " + deleteError.message,
-        //     });
-        //   }
-        // }
-        // After all operations, if there's a result (enhanced or request ID),
-        // we might want to clear selectedFile/previewUrl for the next upload.
-        // resetState() handles this, so the "Tải Lên Ảnh Khác" button will do this.
+        setIsEnhancing(false); // Ensure enhancing is false on error
       }
     } catch (e: any) {
-      // Catch errors from upload step or other general errors
       console.error("Lỗi tổng thể trong quá trình xử lý ảnh:", e);
       setError(e.message || "Đã có lỗi xảy ra.");
       toast.error("Lỗi Tổng Thể", {
         description: e.message || "Đã có lỗi xảy ra trong quá trình xử lý.",
       });
-      setIsUploading(false); // Ensure uploading is false if it fails here
-      setIsEnhancing(false); // Ensure enhancing is also false
+      setIsUploading(false);
+      setIsEnhancing(false);
+      useImageUploadStore.getState().setIsPolling(false);
     }
   };
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
-      resetState(); // Reset all relevant states including error, results
-      // setEnhancedImageUrl(null); // Handled by resetState
-      // setFalRequestId(null);   // Handled by resetState
-      // setError(null);          // Handled by resetState
+      resetState(); // This should clear all relevant states including pollingError, enhancedImageUrl etc.
 
       if (fileRejections.length > 0) {
         const firstRejection = fileRejections[0];
@@ -199,7 +188,7 @@ export function ImageUploadArea() {
         ) {
           message = "File không hợp lệ. Vui lòng chọn một file ảnh.";
         }
-        setError(message);
+        setError(message); // Set general error
         toast.error("Lỗi Upload", { description: message });
         return;
       }
@@ -208,7 +197,7 @@ export function ImageUploadArea() {
         setSelectedFile(acceptedFiles[0]);
       }
     },
-    [setSelectedFile, setError, resetState] // Removed setEnhancedImageUrl, setFalRequestId as resetState handles them
+    [setSelectedFile, setError, resetState]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -227,74 +216,97 @@ export function ImageUploadArea() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {/* Dropzone: Show if no image is being processed or displayed */}
-        {!isUploading && !isEnhancing && !enhancedImageUrl && !falRequestId && (
-          <div
-            {...getRootProps()}
-            className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer
+        {/* Dropzone: Show if not in any processing state and no final/pending result */}
+        {!isUploading &&
+          !isEnhancing &&
+          !isPolling &&
+          !enhancedImageUrl &&
+          !pollingStatusUrl && ( // Also check pollingStatusUrl to hide dropzone if a process was started
+            <div
+              {...getRootProps()}
+              className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer
               ${isDragActive ? "border-primary bg-primary/10" : "border-border hover:border-primary/70"}
-              ${error ? "border-destructive" : ""}
+              ${error && !previewUrl ? "border-destructive" : ""}
               transition-colors duration-200 ease-in-out`}
-          >
-            <input {...getInputProps()} />
-            {previewUrl && selectedFile ? (
-              <div className="relative w-full h-64">
-                <Image
-                  src={previewUrl}
-                  alt={`Xem trước ${selectedFile.name}`}
-                  layout="fill"
-                  objectFit="contain"
-                  className="rounded-md"
-                />
-              </div>
-            ) : isDragActive ? (
-              <p className="text-primary">Thả ảnh vào đây...</p>
-            ) : (
-              <div className="text-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-12 h-12 mx-auto mb-4 text-gray-400"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.338 0 4.5 4.5 0 0 1-1.41 8.775H6.75Z"
+            >
+              <input {...getInputProps()} />
+              {previewUrl && selectedFile ? (
+                <div className="relative w-full h-64">
+                  <Image
+                    src={previewUrl}
+                    alt={`Xem trước ${selectedFile.name}`}
+                    layout="fill"
+                    objectFit="contain"
+                    className="rounded-md"
                   />
-                </svg>
-                <p className="mb-2 text-sm text-muted-foreground">
-                  <span className="font-semibold text-primary">
-                    Nhấp để tải lên
-                  </span>{" "}
-                  hoặc kéo thả
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Chỉ một ảnh (JPEG, PNG, WEBP, GIF)
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+                </div>
+              ) : isDragActive ? (
+                <p className="text-primary">Thả ảnh vào đây...</p>
+              ) : (
+                <div className="text-center">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    strokeWidth={1.5}
+                    stroke="currentColor"
+                    className="w-12 h-12 mx-auto mb-4 text-gray-400"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.338 0 4.5 4.5 0 0 1-1.41 8.775H6.75Z"
+                    />
+                  </svg>
+                  <p className="mb-2 text-sm text-muted-foreground">
+                    <span className="font-semibold text-primary">
+                      Nhấp để tải lên
+                    </span>{" "}
+                    hoặc kéo thả
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Chỉ một ảnh (JPEG, PNG, WEBP, GIF)
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
 
-        {error && !isUploading && !isEnhancing && (
-          <p className="mt-4 text-sm text-destructive text-center">{error}</p>
-        )}
+        {/* General Error display: Show if there's a general error and not actively processing AND no polling error */}
+        {error &&
+          !isUploading &&
+          !isEnhancing &&
+          !isPolling &&
+          !pollingError && ( // Ensure pollingError is also not present
+            <p className="mt-4 text-sm text-destructive text-center">{error}</p>
+          )}
 
-        {(isUploading || isEnhancing) && (
+        {/* Polling Error display: Show if there's a polling error and not actively polling */}
+        {pollingError &&
+          !isPolling && ( // isPolling check might be redundant if pollingError implies !isPolling
+            <p className="mt-4 text-sm text-destructive text-center">
+              {pollingError}
+            </p>
+          )}
+
+        {/* Loading/Processing Indicators */}
+        {(isUploading || isEnhancing || isPolling) && (
           <div className="flex flex-col items-center justify-center mt-4">
             <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
             <p className="text-sm text-muted-foreground">
               {isUploading
                 ? "Đang tải ảnh lên..."
-                : "Đang xử lý ảnh, vui lòng chờ..."}
+                : isEnhancing
+                  ? "Đang gửi yêu cầu xử lý..."
+                  : isPolling
+                    ? "Đang kiểm tra kết quả xử lý..."
+                    : "Đang xử lý..."}
             </p>
           </div>
         )}
 
-        {enhancedImageUrl && !isEnhancing && (
+        {/* Enhanced Image Display: Show if URL exists and not in an active enhancing/polling state */}
+        {enhancedImageUrl && !isEnhancing && !isPolling && (
           <div className="mt-6 text-center">
             <h3 className="text-lg font-semibold mb-2">Ảnh Đã Xử Lý:</h3>
             <div className="relative w-full max-w-md mx-auto h-auto aspect-video border rounded-md overflow-hidden">
@@ -318,61 +330,87 @@ export function ImageUploadArea() {
           </div>
         )}
 
-        {falRequestId && !isEnhancing && !enhancedImageUrl && (
-          <div className="mt-6 text-center p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h3 className="text-lg font-semibold text-blue-700 mb-2">
-              Yêu Cầu Đang Được Xử Lý
-            </h3>
-            <p className="text-sm text-blue-600">
-              Ảnh của bạn đang được AI xử lý. Quá trình này có thể mất vài phút.
-            </p>
-            <p className="text-xs text-blue-500 mt-1">
-              Request ID: {falRequestId}
-            </p>
-            <p className="text-sm text-blue-600 mt-2">
-              Chúng tôi sẽ thông báo cho bạn khi hoàn tất (chức năng này sẽ được
-              cập nhật sau).
-            </p>
-          </div>
-        )}
-      </CardContent>
-      <CardFooter className="flex flex-col items-center gap-4 pt-4">
-        {/* Primary Action Button Area */}
-        {!isUploading && !isEnhancing && (
-          <>
-            {selectedFile && !enhancedImageUrl && !falRequestId && !error && (
-              <Button
-                onClick={handleEnhanceImage}
-                className="w-full max-w-xs cursor-pointer"
-              >
-                Enhance Image
-              </Button>
-            )}
-
-            {/* Button to start over or select a new image */}
-            {(enhancedImageUrl || falRequestId || error || !selectedFile) && (
+        {/* Pending Polling Info Display: Show if pollingStatusUrl exists, not actively polling, and no final image yet AND no polling error */}
+        {pollingStatusUrl &&
+          !isPolling &&
+          !enhancedImageUrl &&
+          !pollingError && (
+            <div className="mt-6 text-center p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+              <h3 className="text-lg font-semibold text-yellow-700 mb-2">
+                Yêu Cầu Đã Được Gửi
+              </h3>
+              <p className="text-sm text-yellow-600">
+                Ảnh của bạn đã được gửi đi xử lý. Nếu trang được tải lại, bạn có
+                thể cần thực hiện lại.
+              </p>
+              {falRequestId && (
+                <p className="text-xs text-yellow-500 mt-1">
+                  Request ID: {falRequestId}
+                </p>
+              )}
+              <p className="text-sm text-yellow-600 mt-2">
+                Trạng thái: Đang chờ xử lý.
+              </p>
               <Button
                 onClick={() => {
+                  useImageUploadStore.getState().setPollingError(null); // Clear previous polling error
+                  useImageUploadStore.getState().setIsPolling(true); // This will re-enable the useQuery via store change
+                }}
+                variant="link"
+                className="mt-2"
+              >
+                Thử kiểm tra lại
+              </Button>
+            </div>
+          )}
+      </CardContent>
+      <CardFooter className="flex flex-col items-center gap-4 pt-4">
+        {/* Primary Action Button Area: Show if not in any active processing state */}
+        {!isUploading && !isEnhancing && !isPolling && (
+          <>
+            {/* Enhance Button: Show if a file is selected, no results yet, and no pending polling, and no errors */}
+            {selectedFile &&
+              !enhancedImageUrl &&
+              !pollingStatusUrl &&
+              !error && // No general error
+              !pollingError && ( // No polling error
+                <Button
+                  onClick={handleEnhanceImage}
+                  className="w-full max-w-xs cursor-pointer"
+                >
+                  Enhance Image
+                </Button>
+              )}
+
+            {/* Button to start over or select a new image */}
+            {(enhancedImageUrl ||
+              pollingStatusUrl || // If a process was started (even if it errored later)
+              error || // If there was a general error
+              pollingError || // If there was a polling error
+              !selectedFile) && ( // Initial state or after reset
+              <Button
+                onClick={() => {
+                  // If in a clean state (no file, no errors, no results), trigger file input
                   if (
                     !selectedFile &&
                     !error &&
+                    !pollingError &&
                     !enhancedImageUrl &&
-                    !falRequestId
+                    !pollingStatusUrl
                   ) {
-                    // If no file is selected and no error/result, try to trigger file input
                     const inputElement =
                       document.querySelector('input[type="file"]');
                     if (inputElement instanceof HTMLElement) {
                       inputElement.click();
-                      return; // Don't reset state yet, let user pick a file
+                      return; // Prevent resetState if just opening file dialog
                     }
                   }
-                  resetState();
+                  resetState(); // Otherwise, reset everything
                 }}
                 variant="outline"
                 className="w-full max-w-xs cursor-pointer"
               >
-                {enhancedImageUrl || falRequestId || error
+                {enhancedImageUrl || pollingStatusUrl || error || pollingError
                   ? "Tải Lên Ảnh Khác"
                   : "Chọn Ảnh Để Bắt Đầu"}
               </Button>

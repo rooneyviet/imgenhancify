@@ -6,9 +6,14 @@ import { FalAIProvider } from "./FalAIProvider";
 export type ProviderType = "fal.ai" | "other_provider"; // Add more as needed
 
 export class ImageEnhancementFactory {
+  static determineProviderType(type?: ProviderType): ProviderType {
+    return (type ||
+      process.env.IMAGE_ENHANCEMENT_PROVIDER ||
+      "fal.ai") as ProviderType;
+  }
+
   static getProvider(type?: ProviderType): ImageEnhancementProvider {
-    const providerType =
-      type || process.env.IMAGE_ENHANCEMENT_PROVIDER || "fal.ai";
+    const providerType = ImageEnhancementFactory.determineProviderType(type);
     console.log(
       `ImageEnhancementFactory: Getting provider for type: ${providerType}`
     );

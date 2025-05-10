@@ -1,0 +1,26 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app
+      # Đảm bảo node_modules không bị ghi đè bởi volume từ host
+      # Điều này quan trọng nếu node_modules trong container khác với host
+      - /app/node_modules
+      # Nếu bạn build Next.js output vào một thư mục khác .next,
+      # bạn cũng có thể muốn thêm volume cho thư mục đó để tránh bị ghi đè.
+      # Ví dụ: - /app/.next
+    environment:
+      NODE_ENV: development
+      # Biến này cần thiết để Next.js biết nó đang chạy trong container
+      # và không cố gắng mở trình duyệt.
+      BROWSER: none
+      # Biến này giúp Next.js nhận diện thay đổi file nhanh hơn trong một số trường hợp
+      WATCHPACK_POLLING: true
+    # Override CMD trong Dockerfile để chạy ở chế độ development với hot-reloading
+    command: npm run dev

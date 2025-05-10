@@ -199,7 +199,7 @@ export class FalPollingProvider implements PollingProvider {
   }
 
   public getPollingInterval(): number {
-    return 1000; // 1 giây
+    return 3000; // 1 giây
   }
 
   public getMaxPollingDuration(): number {

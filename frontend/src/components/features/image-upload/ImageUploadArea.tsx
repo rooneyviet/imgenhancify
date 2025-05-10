@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback } from "react"; // Removed useEffect as it's no longer used for polling here
+import { useCallback } from "react";
+// Removed ReactCompareImage import, it's now in ImageCompareResult.tsx
 import { useDropzone, FileRejection, Accept } from "react-dropzone-esm";
 import { useImagePolling } from "@/hooks/useImagePolling"; // Import hook mới
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
@@ -16,6 +17,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
+// import React from "react"; // No longer explicitly needed here
+import { ImageCompareResult } from "./ImageCompareResult"; // Import the new component
 
 const acceptedFileTypes: Accept = {
   "image/jpeg": [".jpg", ".jpeg"],
@@ -27,7 +30,7 @@ const acceptedFileTypes: Accept = {
 export function ImageUploadArea() {
   const {
     selectedFile,
-    previewUrl,
+    previewUrl, // This is our originalImageUrl
     error, // General error
     isUploading,
     isEnhancing,
@@ -305,36 +308,52 @@ export function ImageUploadArea() {
           </div>
         )}
 
-        {/* Enhanced Image Display: Show if URL exists and not in an active enhancing/polling state */}
-        {enhancedImageUrl && !isEnhancing && !isPolling && (
-          <div className="mt-6 text-center">
-            <h3 className="text-lg font-semibold mb-2">Ảnh Đã Xử Lý:</h3>
-            <div className="relative w-full max-w-md mx-auto h-auto aspect-video border rounded-md overflow-hidden">
-              <Image
-                src={enhancedImageUrl}
-                alt="Ảnh đã được xử lý"
-                layout="fill"
-                objectFit="contain"
-              />
-            </div>
-            <Button
-              onClick={() => {
-                toast.info("Thông báo", {
-                  description: "Chức năng tải xuống sẽ sớm được cập nhật.",
-                });
-              }}
-              className="mt-4 cursor-pointer"
-            >
-              Tải Xuống Ảnh
-            </Button>
-          </div>
-        )}
+        {/* Display ImageCompareResult if conditions are met */}
+        {previewUrl &&
+          enhancedImageUrl &&
+          !isUploading &&
+          !isEnhancing &&
+          !isPolling && (
+            <ImageCompareResult
+              originalImageUrl={previewUrl}
+              enhancedImageUrl={enhancedImageUrl}
+            />
+          )}
 
-        {/* Pending Polling Info Display: Show if pollingStatusUrl exists, not actively polling, and no final image yet AND no polling error */}
+        {/* Fallback Enhanced Image Display (if only enhanced is available and not comparing) */}
+        {enhancedImageUrl &&
+          !previewUrl && // Only show if original is not available (so compare won't show)
+          !isEnhancing &&
+          !isPolling && (
+            <div className="mt-6 text-center">
+              <h3 className="text-lg font-semibold mb-2">Ảnh Đã Xử Lý:</h3>
+              <div className="relative w-full max-w-md mx-auto h-auto aspect-video border rounded-md overflow-hidden">
+                <Image
+                  src={enhancedImageUrl}
+                  alt="Ảnh đã được xử lý"
+                  layout="fill"
+                  objectFit="contain"
+                />
+              </div>
+              <Button
+                onClick={() => {
+                  toast.info("Thông báo", {
+                    description: "Chức năng tải xuống sẽ sớm được cập nhật.",
+                  });
+                }}
+                className="mt-4 cursor-pointer"
+              >
+                Tải Xuống Ảnh
+              </Button>
+            </div>
+          )}
+
+        {/* Pending Polling Info Display: Show if pollingStatusUrl exists, not actively polling, and no final image yet AND no polling error, AND NOT showing compare image */}
         {pollingStatusUrl &&
           !isPolling &&
-          !enhancedImageUrl &&
-          !pollingError && (
+          !enhancedImageUrl && // Still check this, as polling might complete but we want to show compare
+          !pollingError &&
+          !(previewUrl && enhancedImageUrl) && ( // Hide if compare image is shown
             <div className="mt-6 text-center p-4 bg-yellow-50 border border-yellow-200 rounded-md">
               <h3 className="text-lg font-semibold text-yellow-700 mb-2">
                 Yêu Cầu Đã Được Gửi
@@ -369,8 +388,9 @@ export function ImageUploadArea() {
         {!isUploading && !isEnhancing && !isPolling && (
           <>
             {/* Enhance Button: Show if a file is selected, no results yet, and no pending polling, and no errors */}
+            {/* Enhance Button: Show if a file is selected, no results yet, and no pending polling, and no errors */}
             {selectedFile &&
-              !enhancedImageUrl &&
+              !enhancedImageUrl && // Only show if no enhanced image yet (ReactCompareImage will handle display if present)
               !pollingStatusUrl &&
               !error && // No general error
               !pollingError && ( // No polling error
@@ -383,38 +403,51 @@ export function ImageUploadArea() {
               )}
 
             {/* Button to start over or select a new image */}
-            {(enhancedImageUrl ||
-              pollingStatusUrl || // If a process was started (even if it errored later)
+            {/* Show this button if:
+                - There's an enhanced image (meaning a comparison might be shown or was shown)
+                - A polling process was initiated (even if it errored)
+                - There's a general error
+                - There's a polling error
+                - No file is selected (initial state)
+            */}
+            {(previewUrl && enhancedImageUrl) || // If comparison is shown
+              pollingStatusUrl || // If a process was started
               error || // If there was a general error
               pollingError || // If there was a polling error
-              !selectedFile) && ( // Initial state or after reset
-              <Button
-                onClick={() => {
-                  // If in a clean state (no file, no errors, no results), trigger file input
-                  if (
-                    !selectedFile &&
-                    !error &&
-                    !pollingError &&
-                    !enhancedImageUrl &&
-                    !pollingStatusUrl
-                  ) {
-                    const inputElement =
-                      document.querySelector('input[type="file"]');
-                    if (inputElement instanceof HTMLElement) {
-                      inputElement.click();
-                      return; // Prevent resetState if just opening file dialog
-                    }
-                  }
-                  resetState(); // Otherwise, reset everything
-                }}
-                variant="outline"
-                className="w-full max-w-xs cursor-pointer"
-              >
-                {enhancedImageUrl || pollingStatusUrl || error || pollingError
-                  ? "Tải Lên Ảnh Khác"
-                  : "Chọn Ảnh Để Bắt Đầu"}
-              </Button>
-            )}
+              !selectedFile || // Initial state or after reset
+              (selectedFile &&
+                !enhancedImageUrl &&
+                !pollingStatusUrl && ( // File selected, but not yet enhanced (allows to change mind)
+                  <Button
+                    onClick={() => {
+                      // If in a clean state (no file, no errors, no results), and we want to select a file
+                      if (
+                        !selectedFile &&
+                        !error &&
+                        !pollingError &&
+                        !enhancedImageUrl &&
+                        !pollingStatusUrl
+                      ) {
+                        const inputElement =
+                          document.querySelector('input[type="file"]');
+                        if (inputElement instanceof HTMLElement) {
+                          inputElement.click();
+                          return; // Prevent resetState if just opening file dialog
+                        }
+                      }
+                      resetState(); // Otherwise, reset everything to clear comparison, errors, etc.
+                    }}
+                    variant="outline"
+                    className="w-full max-w-xs cursor-pointer"
+                  >
+                    {(previewUrl && enhancedImageUrl) ||
+                    pollingStatusUrl ||
+                    error ||
+                    pollingError
+                      ? "Tải Lên Ảnh Khác"
+                      : "Chọn Ảnh Để Bắt Đầu"}
+                  </Button>
+                ))}
           </>
         )}
       </CardFooter>

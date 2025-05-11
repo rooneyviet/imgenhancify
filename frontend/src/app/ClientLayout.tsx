@@ -6,6 +6,7 @@ import React from "react";
 import { useAuthStore } from "@/lib/store/authStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
+import { Toaster } from "sonner";
 
 export default function ClientLayout({
   children,
@@ -60,6 +61,7 @@ export default function ClientLayout({
         <footer className="bg-gray-100 dark:bg-gray-800 text-center p-4 text-sm text-gray-600 dark:text-gray-400">
           © {new Date().getFullYear()} ImgEnhancify. All rights reserved.
         </footer>
+        <Toaster richColors position="bottom-right" />
       </div>
     </QueryClientProvider>
   );

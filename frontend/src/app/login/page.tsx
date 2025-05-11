@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -21,6 +23,7 @@ export default function LoginPage() {
   const [authCode, setAuthCode] = useState<string>("");
   const [isLoading, setIsLoading] = useState(false);
   const { login, error: authError, setError: setAuthError } = useAuthStore();
+  const router = useRouter();
 
   const handleLogin = async () => {
     if (!authCode.trim()) {
@@ -37,6 +40,14 @@ export default function LoginPage() {
       if (result.success && result.userId) {
         // If verification is successful, update the auth store
         login(authCode.trim(), result.userId); // Pass userId to the store's login
+
+        // Show success toast and redirect to main page
+        toast.success("Login successful", {
+          description: "Welcome back to IMG Enhancify!",
+        });
+
+        // Redirect to main page
+        router.push("/");
       } else {
         // If verification fails, set the error
         setAuthError(result.error || "Invalid authentication code.");

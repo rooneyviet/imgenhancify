@@ -15,11 +15,23 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal, Copy, Check } from "lucide-react";
 import { signUp } from "../actions/auth";
 
+// Helper function to format the auth code for display
+function formatAuthCodeForDisplay(code: string): string {
+  if (!code || code.length !== 16) return code; // Return as is if not 16 chars
+  const upperCode = code.toUpperCase();
+  return `${upperCode.substring(0, 4)} ${upperCode.substring(4, 8)} ${upperCode.substring(8, 12)} ${upperCode.substring(12, 16)}`;
+}
+
 export default function SignupPage() {
   const [authCode, setAuthCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+
+  // Derived state for displaying the formatted code
+  const displayedAuthCode = authCode
+    ? formatAuthCodeForDisplay(authCode)
+    : null;
 
   const generateAuthCode = async () => {
     setIsLoading(true);
@@ -43,9 +55,9 @@ export default function SignupPage() {
   };
 
   const copyToClipboard = async () => {
-    if (authCode) {
+    if (displayedAuthCode) {
       try {
-        await navigator.clipboard.writeText(authCode);
+        await navigator.clipboard.writeText(displayedAuthCode);
         setCopied(true);
         setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
       } catch (err) {
@@ -103,7 +115,7 @@ export default function SignupPage() {
                   </Button>
                 </div>
                 <AlertDescription className="font-mono text-lg break-all mt-1">
-                  {authCode}
+                  {displayedAuthCode}
                 </AlertDescription>
               </Alert>
               <Alert variant="destructive">

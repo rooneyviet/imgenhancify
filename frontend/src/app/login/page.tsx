@@ -63,10 +63,11 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
           <Input
             type="text"
-            placeholder="Enter your login code"
+            placeholder="XXXX XXXX XXXX XXXX"
             value={authCode}
             onChange={(e) => setAuthCode(e.target.value)}
-            maxLength={16}
+            maxLength={19} // 16 characters + 3 spaces
+            className="font-mono"
           />
           {authError && (
             <Alert variant="destructive">

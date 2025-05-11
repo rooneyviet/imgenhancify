@@ -47,10 +47,26 @@ export async function logIn(
     return { error: "Authentication code cannot be empty." };
   }
 
+  // Normalize the auth code input:
+  // 1. Remove all whitespace characters (spaces, tabs, newlines, etc.)
+  // 2. Convert to lowercase
+  const normalizedAuthCode = authCode.replace(/\s+/g, "").toLowerCase();
+
+  // Validate the normalized code
+  if (
+    normalizedAuthCode.length !== 16 ||
+    !/^[a-z0-9]{16}$/.test(normalizedAuthCode)
+  ) {
+    return {
+      error:
+        "Invalid authentication code. Please check the code and try again.",
+    };
+  }
+
   try {
     const user = await prisma.user.findUnique({
       where: {
-        authCode: authCode.trim(),
+        authCode: normalizedAuthCode, // Query with the normalized code
       },
     });
 

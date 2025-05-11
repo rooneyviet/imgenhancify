@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Imgenhancify",
+  title: "IMG Enhancify",
   description: "Enhance the quality of your images",
 };
 

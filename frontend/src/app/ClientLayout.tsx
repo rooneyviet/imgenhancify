@@ -12,11 +12,6 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
-  // Create an instance of QueryClient.
-  // To avoid recreating the client on every render, you might want to store it in state or ref if this component re-renders frequently.
-  // Or, better yet, define it outside the component if it doesn't depend on the component's props/state.
-  // In this case, since ClientLayout is a high-level layout, creating it once here is fine.
-  // Alternatively, it can be created at the module level: const queryClient = new QueryClient();
   const [queryClient] = React.useState(() => new QueryClient());
 
   const { isAuthenticated, userAuthCode, logout } = useAuthStore();
@@ -63,7 +58,7 @@ export default function ClientLayout({
         </header>
         <main className="flex-grow container mx-auto p-4">{children}</main>
         <footer className="bg-gray-100 dark:bg-gray-800 text-center p-4 text-sm text-gray-600 dark:text-gray-400">
-          © {new Date().getFullYear()} Imgenhancify. All rights reserved.
+          © {new Date().getFullYear()} ImgEnhancify. All rights reserved.
         </footer>
       </div>
     </QueryClientProvider>

@@ -1,39 +1,39 @@
-# Use the latest Node.js LTS base image
-FROM node:20-alpine AS base
+# Use Node.js LTS with Debian (not Alpine) for build stage
+FROM node:20 AS base
 
 # Set the working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json (or yarn.lock / pnpm-lock.yaml)
+# Copy package.json and package-lock.json
 COPY package.json ./
 COPY package-lock.json ./
-# If you use yarn or pnpm, change the line above accordingly
-# COPY yarn.lock ./
-# COPY pnpm-lock.yaml ./
 
-# Install dependencies for the production environment
-FROM base AS deps
-RUN npm ci --only=production
-
-# Install all dependencies (including devDependencies) for the build environment
+# Install all dependencies (including dev dependencies)
 FROM base AS builder
-COPY --from=deps /app/node_modules /app/node_modules
+# Disable Next.js telemetry
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm ci
 COPY . .
+# Set NODE_ENV to production for the build
+ENV NODE_ENV=production
 RUN npm run build
 
-# Create production image
-FROM base AS runner
+# Create production image - use Alpine for the runner as it's smaller
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
 
 # Copy build artifacts from the builder stage
 COPY --from=builder /app/public ./public
-COPY --from=builder --chown=node:node ./.next/standalone ./
-COPY --from=builder --chown=node:node ./.next/static ./.next/static
+COPY --from=builder /app/.next/standalone ./
+COPY --from=builder /app/.next/static ./.next/static
 
 # Expose port
 EXPOSE 3000
+
+# Use non-root user for better security
+USER node
 
 # CMD command to start the application
 CMD ["node", "server.js"]

@@ -5,22 +5,25 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # Use target to specify which stage to use for development
+      target: builder
     ports:
       - "3000:3000"
+    # For development mode, we'll use these volumes
+    # In production, you would use the final image without these volumes
     volumes:
       - ./frontend:/app
-      # Đảm bảo node_modules không bị ghi đè bởi volume từ host
-      # Điều này quan trọng nếu node_modules trong container khác với host
+      # Prevent node_modules from being overwritten by the host volume
       - /app/node_modules
-      # Nếu bạn build Next.js output vào một thư mục khác .next,
-      # bạn cũng có thể muốn thêm volume cho thư mục đó để tránh bị ghi đè.
-      # Ví dụ: - /app/.next
+      # Prevent .next from being overwritten
+      - /app/.next
     environment:
       NODE_ENV: development
-      # Biến này cần thiết để Next.js biết nó đang chạy trong container
-      # và không cố gắng mở trình duyệt.
+      # Prevent Next.js from opening a browser
       BROWSER: none
-      # Biến này giúp Next.js nhận diện thay đổi file nhanh hơn trong một số trường hợp
+      # Enable polling for file changes in Docker
       WATCHPACK_POLLING: true
-    # Override CMD trong Dockerfile để chạy ở chế độ development với hot-reloading
+      # Disable telemetry for Next.js
+      NEXT_TELEMETRY_DISABLED: 1
+    # Override CMD in Dockerfile to run in development mode with hot-reloading
     command: npm run dev

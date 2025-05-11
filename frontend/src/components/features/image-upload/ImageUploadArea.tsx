@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useDropzone, FileRejection, Accept } from "react-dropzone-esm";
-import { useImageUploadStore } from "@/lib/store/imageUploadStore";
+import { useImageUploadStore, ImageItem } from "@/lib/store/imageUploadStore";
+import { useImagePolling } from "@/hooks/useImagePolling";
 import {
   Card,
   CardContent,
@@ -14,7 +15,8 @@ import {
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Image from "next/image";
-import { Loader2 } from "lucide-react";
+import { Loader2, X, Check, AlertCircle } from "lucide-react";
+import { ImageCompareResult, SelectedImageCompare } from "./ImageCompareResult";
 
 const acceptedFileTypes: Accept = {
   "image/jpeg": [".jpg", ".jpeg"],
@@ -23,232 +25,414 @@ const acceptedFileTypes: Accept = {
   "image/gif": [".gif"],
 };
 
-export function ImageUploadArea() {
-  const {
-    selectedFile,
-    previewUrl,
-    error,
-    isUploading,
-    isEnhancing,
-    enhancedImageUrl,
-    falRequestId,
-    setSelectedFile,
-    setError,
-    setIsUploading,
-    setIsEnhancing,
-    setEnhancedImageUrl,
-    setFalRequestId,
-    resetState,
-  } = useImageUploadStore();
+// Component to handle individual image processing
+function ImageProcessor({ imageId }: { imageId: string }) {
+  const store = useImageUploadStore();
+  const image = store.images.find((img) => img.id === imageId);
 
-  const handleEnhanceImage = async () => {
-    if (!selectedFile) {
-      toast.error("Lỗi", { description: "Vui lòng chọn một ảnh để xử lý." });
-      return;
-    }
+  useEffect(() => {
+    if (!image) return;
 
-    setIsUploading(true);
-    setError(null);
-    setEnhancedImageUrl(null);
-    setFalRequestId(null);
+    const processImage = async () => {
+      if (!image.isUploading) return;
 
-    let uploadedImageUrl: string | null = null;
-
-    try {
-      // Step 1: Upload image
-      const formData = new FormData();
-      formData.append("file", selectedFile);
-
-      const uploadResponse = await fetch("/api/upload-image", {
-        method: "POST",
-        body: formData,
-      });
-
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json().catch(() => ({}));
-        throw new Error(
-          errorData.error || "Upload ảnh gốc thất bại. Vui lòng thử lại."
-        );
-      }
-
-      const uploadResult = await uploadResponse.json();
-      if (!uploadResult.imageUrl) {
-        console.error("API response không có imageUrl:", uploadResult);
-        throw new Error("Không nhận được URL ảnh từ API upload.");
-      }
-      uploadedImageUrl = uploadResult.imageUrl;
-      console.log("Uploaded image URL:", uploadedImageUrl);
-      // const providerDeleteUrl = uploadResult.provider_delete_url; // For future use if needed
-
-      toast.success("Thành công", { description: "Ảnh gốc đã được tải lên." });
-      setIsUploading(false);
-      setIsEnhancing(true);
-
-      // Step 2: Enhance image
       try {
-        if (!uploadedImageUrl) {
-          // This check is a safeguard, should have been caught by the check above
+        // Step 1: Upload image
+        const formData = new FormData();
+        formData.append("file", image.file);
+
+        const uploadResponse = await fetch("/api/upload-image", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadResponse.ok) {
+          const errorData = await uploadResponse.json().catch(() => ({}));
           throw new Error(
-            "uploadedImageUrl không hợp lệ trước khi gọi enhance."
+            errorData.error || "Original image upload failed. Please try again."
           );
         }
+
+        const uploadResult = await uploadResponse.json();
+        if (!uploadResult.imageUrl) {
+          throw new Error("Did not receive image URL from upload API.");
+        }
+
+        // Update image with uploaded URL and start enhancement
+        store.updateImage(imageId, {
+          isUploading: false,
+          isEnhancing: true,
+          uploadedImageUrl: uploadResult.imageUrl,
+        });
+
+        // Step 2: Enhance image
         const enhanceResponse = await fetch("/api/enhance-image", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_url: uploadedImageUrl }),
+          body: JSON.stringify({ image_url: uploadResult.imageUrl }),
         });
 
         if (!enhanceResponse.ok) {
           const errorData = await enhanceResponse.json().catch(() => ({}));
           throw new Error(
-            errorData.error || "Xử lý ảnh thất bại. Vui lòng thử lại."
+            errorData.error || "Image processing failed. Please try again."
           );
         }
 
         const enhanceResult = await enhanceResponse.json();
 
+        // Handle different enhancement results
         if (enhanceResult.enhancedUrl) {
-          setEnhancedImageUrl(enhanceResult.enhancedUrl);
-          toast.success("Thành công", {
-            description: "Ảnh đã được xử lý thành công!",
+          // Direct result
+          store.updateImage(imageId, {
+            isEnhancing: false,
+            enhancedImageUrl: enhanceResult.enhancedUrl,
           });
-        } else if (enhanceResult.request_id) {
-          setFalRequestId(enhanceResult.request_id);
-          console.log("Fal.ai Request ID:", enhanceResult.request_id);
-          toast.info("Đang xử lý", {
-            description:
-              "Ảnh của bạn đang được xử lý. Kết quả sẽ có sau ít phút.",
-          });
-        } else {
-          // If no enhancedUrl and no request_id, it's an unexpected success response
-          toast.warning("Thông báo", {
-            description:
-              "Không nhận được kết quả xử lý hoặc ID yêu cầu từ API.",
-          });
-        }
-      } catch (enhanceError: any) {
-        // Catch errors specifically from the enhance step
-        console.error("Lỗi trong quá trình enhance ảnh:", enhanceError);
-        setError(enhanceError.message || "Lỗi khi xử lý ảnh.");
-        toast.error("Lỗi Enhance", {
-          description: enhanceError.message || "Lỗi khi xử lý ảnh.",
-        });
-      } finally {
-        setIsEnhancing(false); // Always set enhancing to false after this block
 
-        // Step 3: Delete original image from ImgBB, regardless of enhance success/failure
-        // if (uploadedImageUrl) {
-        //   try {
-        //     const deleteResponse = await fetch("/api/delete-image", {
-        //       method: "POST",
-        //       headers: { "Content-Type": "application/json" },
-        //       body: JSON.stringify({ image_url: uploadedImageUrl }),
-        //     });
-        //     if (!deleteResponse.ok) {
-        //       const errorData = await deleteResponse.json().catch(() => ({}));
-        //       console.error(
-        //         "Lỗi xóa ảnh gốc:",
-        //         errorData.error || "Unknown error"
-        //       );
-        //       toast.warning("Cảnh báo Xóa", {
-        //         description:
-        //           "Không thể xóa ảnh gốc trên server trung gian. " +
-        //           (errorData.error || ""),
-        //       });
-        //     } else {
-        //       console.log("Ảnh gốc đã được xóa khỏi ImgBB.");
-        //     }
-        //   } catch (deleteError: any) {
-        //     console.error("Lỗi gọi API xóa ảnh:", deleteError);
-        //     toast.warning("Cảnh báo Xóa", {
-        //       description:
-        //         "Lỗi khi cố gắng xóa ảnh gốc: " + deleteError.message,
-        //     });
-        //   }
-        // }
-        // After all operations, if there's a result (enhanced or request ID),
-        // we might want to clear selectedFile/previewUrl for the next upload.
-        // resetState() handles this, so the "Tải Lên Ảnh Khác" button will do this.
+          // Process next image after delay
+          setTimeout(() => {
+            store.processNextImage();
+          }, 2000);
+        } else if (enhanceResult.status_url && enhanceResult.provider_name) {
+          // Need to poll for result
+          store.updateImage(imageId, {
+            isEnhancing: false,
+            falRequestId: enhanceResult.request_id || null,
+          });
+          store.startPolling(
+            imageId,
+            enhanceResult.status_url,
+            enhanceResult.provider_name
+          );
+        } else if (
+          enhanceResult.request_id &&
+          enhanceResult.status === "IN_QUEUE" &&
+          enhanceResult.status_url
+        ) {
+          // Fal.ai specific queue
+          store.updateImage(imageId, {
+            isEnhancing: false,
+            falRequestId: enhanceResult.request_id,
+          });
+          store.startPolling(imageId, enhanceResult.status_url, "fal");
+        } else {
+          // Unexpected result
+          store.updateImage(imageId, {
+            isEnhancing: false,
+            error:
+              enhanceResult.error ||
+              "Did not receive necessary information from API.",
+          });
+
+          // Process next image after delay
+          setTimeout(() => {
+            store.processNextImage();
+          }, 2000);
+        }
+      } catch (error: any) {
+        console.error("Error processing image:", error);
+        store.updateImage(imageId, {
+          isUploading: false,
+          isEnhancing: false,
+          isPolling: false,
+          error: error.message || "An error occurred during processing.",
+        });
+
+        // Process next image after delay
+        setTimeout(() => {
+          store.processNextImage();
+        }, 2000);
       }
-    } catch (e: any) {
-      // Catch errors from upload step or other general errors
-      console.error("Lỗi tổng thể trong quá trình xử lý ảnh:", e);
-      setError(e.message || "Đã có lỗi xảy ra.");
-      toast.error("Lỗi Tổng Thể", {
-        description: e.message || "Đã có lỗi xảy ra trong quá trình xử lý.",
+    };
+
+    if (image.isUploading) {
+      processImage();
+    }
+  }, [imageId, image, store]);
+
+  return null; // This is a logic-only component
+}
+
+// Thumbnail component for an individual image
+function ImageThumbnail({
+  image,
+  isSelected,
+  onClick,
+  onRemove,
+  isProcessing,
+}: {
+  image: ImageItem;
+  isSelected: boolean;
+  onClick: () => void;
+  onRemove: () => void;
+  isProcessing: boolean;
+}) {
+  const getStatusIndicator = () => {
+    if (image.isUploading) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
+          <Loader2 className="w-6 h-6 animate-spin text-white" />
+          <span className="text-xs text-white ml-2">Uploading</span>
+        </div>
+      );
+    }
+
+    if (image.isPolling || image.isEnhancing) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
+          <Loader2 className="w-6 h-6 animate-spin text-white" />
+          <span className="text-xs text-white ml-2">Processing</span>
+        </div>
+      );
+    }
+
+    if (image.error || image.pollingError) {
+      return (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
+          <AlertCircle className="w-6 h-6 text-red-500" />
+        </div>
+      );
+    }
+
+    if (image.enhancedImageUrl) {
+      return (
+        <div className="absolute top-1 right-1 bg-green-500 rounded-full p-1">
+          <Check className="w-4 h-4 text-white" />
+        </div>
+      );
+    }
+
+    return null;
+  };
+
+  // Determine if this image is selectable (only processed images are selectable)
+  const isSelectable = image.enhancedImageUrl !== null;
+
+  // Show remove button only if not processing and not yet enhanced
+  const showRemoveButton =
+    !isProcessing &&
+    !image.isUploading &&
+    !image.isEnhancing &&
+    !image.isPolling &&
+    !image.enhancedImageUrl; // Hide remove button after image is processed
+
+  return (
+    <div
+      className={`relative w-24 h-24 border rounded-md overflow-hidden transition-all
+        ${isSelectable && isSelected ? "ring-2 ring-primary" : ""}
+        ${image.enhancedImageUrl ? "border-green-500 cursor-pointer" : "border-gray-200"}
+        ${image.error || image.pollingError ? "border-red-500" : ""}
+      `}
+      onClick={isSelectable ? onClick : undefined}
+      title={image.file.name}
+    >
+      {image.previewUrl && (
+        <Image
+          src={image.previewUrl}
+          alt={image.file.name}
+          layout="fill"
+          objectFit="cover"
+          className="rounded-md"
+        />
+      )}
+      {getStatusIndicator()}
+
+      {/* Remove button */}
+      {showRemoveButton && (
+        <button
+          className="absolute top-1 right-1 bg-red-500 rounded-full p-1 z-10 hover:bg-red-600 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation(); // Prevent triggering the parent onClick
+            onRemove();
+          }}
+          title="Remove image"
+        >
+          <X className="w-3 h-3 text-white" />
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Component to handle polling for multiple images
+function ImagePollingManager() {
+  const store = useImageUploadStore();
+  const [pollingImages, setPollingImages] = useState<string[]>([]);
+
+  // Find all images that need polling
+  useEffect(() => {
+    const imagesToPoll = store.images
+      .filter(
+        (img) =>
+          img.isPolling && img.pollingStatusUrl && img.pollingProviderName
+      )
+      .map((img) => img.id);
+
+    setPollingImages(imagesToPoll);
+  }, [store.images]);
+
+  return (
+    <>
+      {pollingImages.map((imageId) => (
+        <PollingHandler key={imageId} imageId={imageId} />
+      ))}
+    </>
+  );
+}
+
+// Individual polling handler component
+function PollingHandler({ imageId }: { imageId: string }) {
+  const { initiatePolling } = useImagePolling({ imageId });
+
+  // This component doesn't render anything, it just sets up the polling
+  return null;
+}
+
+export function ImageUploadArea() {
+  const store = useImageUploadStore();
+  const [activeProcessors, setActiveProcessors] = useState<string[]>([]);
+
+  // Update active processors when images change
+  useEffect(() => {
+    const newProcessors = store.images
+      .filter((img) => img.isUploading || img.isEnhancing)
+      .map((img) => img.id);
+
+    setActiveProcessors(newProcessors);
+  }, [store.images]);
+
+  // Handle enhancing all images
+  const handleEnhanceImages = () => {
+    if (store.images.length === 0) {
+      toast.error("Error", {
+        description: "Please select at least one image to process.",
       });
-      setIsUploading(false); // Ensure uploading is false if it fails here
-      setIsEnhancing(false); // Ensure enhancing is also false
+      return;
+    }
+
+    // Start processing the first image
+    if (store.processingQueue.length > 0) {
+      // Set isProcessingQueue to true before starting processing
+      useImageUploadStore.setState({
+        isProcessingQueue: true,
+        isProcessing: true,
+      });
+
+      // Start processing the first image
+      store.processNextImage();
+
+      toast.success("Processing Started", {
+        description: `Starting to process ${store.images.length} ${store.images.length === 1 ? "image" : "images"}.`,
+      });
     }
   };
 
   const onDrop = useCallback(
     (acceptedFiles: File[], fileRejections: FileRejection[]) => {
-      resetState(); // Reset all relevant states including error, results
-      // setEnhancedImageUrl(null); // Handled by resetState
-      // setFalRequestId(null);   // Handled by resetState
-      // setError(null);          // Handled by resetState
-
       if (fileRejections.length > 0) {
         const firstRejection = fileRejections[0];
-        let message = "Có lỗi xảy ra khi tải file lên.";
-        if (firstRejection.errors.some((e) => e.code === "too-many-files")) {
-          message = "Chỉ được phép tải lên một ảnh duy nhất.";
-        } else if (
-          firstRejection.errors.some((e) => e.code === "file-invalid-type")
-        ) {
-          message = "File không hợp lệ. Vui lòng chọn một file ảnh.";
+        let message = "An error occurred while uploading the file.";
+
+        if (firstRejection.errors.some((e) => e.code === "file-invalid-type")) {
+          message = "Invalid file. Please select an image file.";
         }
-        setError(message);
-        toast.error("Lỗi Upload", { description: message });
+
+        store.setError(message);
+        toast.error("Upload Error", { description: message });
         return;
       }
 
       if (acceptedFiles.length > 0) {
-        setSelectedFile(acceptedFiles[0]);
+        // Check if adding these would exceed the limit
+        const currentCount = store.images.length;
+        const newCount = currentCount + acceptedFiles.length;
+        const MAX_IMAGES = 20;
+
+        if (newCount > MAX_IMAGES) {
+          const canAdd = MAX_IMAGES - currentCount;
+          if (canAdd <= 0) {
+            toast.error("Limit Reached", {
+              description: `You can only upload a maximum of ${MAX_IMAGES} images.`,
+            });
+            return;
+          }
+
+          // Only add up to the limit
+          const limitedFiles = acceptedFiles.slice(0, canAdd);
+          store.addImages(limitedFiles);
+
+          toast.warning("Limit Reached", {
+            description: `Added ${canAdd} images. You've reached the maximum of ${MAX_IMAGES} images.`,
+          });
+        } else {
+          // Add all the new images to the store
+          store.addImages(acceptedFiles);
+
+          const fileCount = acceptedFiles.length;
+          toast.success("Images Added", {
+            description: `${fileCount} ${fileCount === 1 ? "image" : "images"} added.`,
+          });
+        }
       }
     },
-    [setSelectedFile, setError, resetState] // Removed setEnhancedImageUrl, setFalRequestId as resetState handles them
+    [store]
   );
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
     accept: acceptedFileTypes,
-    multiple: false,
-    maxFiles: 1,
+    multiple: true,
+    maxFiles: 20,
   });
 
+  const handleRemoveAll = () => {
+    store.resetState();
+    toast.info("All images removed");
+  };
+
+  // Check if all images have been processed
+  const allImagesProcessed =
+    store.images.length > 0 &&
+    store.images.every(
+      (img) => img.enhancedImageUrl || img.error || img.pollingError
+    );
+
+  // Start a new session by resetting the state
+  const handleStartNewSession = () => {
+    store.resetState();
+    toast.info("Ready for new images");
+  };
+
   return (
-    <Card className="w-full max-w-2xl mx-auto">
+    <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
-        <CardTitle>Tăng Cường Chất Lượng Ảnh</CardTitle>
+        <CardTitle>Enhance Image Quality</CardTitle>
         <CardDescription>
-          Tải ảnh của bạn lên để cải thiện chất lượng bằng AI.
+          Upload up to 20 images to improve their quality using AI.
         </CardDescription>
       </CardHeader>
+
       <CardContent>
-        {/* Dropzone: Show if no image is being processed or displayed */}
-        {!isUploading && !isEnhancing && !enhancedImageUrl && !falRequestId && (
+        {/* Render invisible image processors for each active image */}
+        {activeProcessors.map((id) => (
+          <ImageProcessor key={id} imageId={id} />
+        ))}
+
+        {/* Polling manager for all images that need polling */}
+        <ImagePollingManager />
+
+        {/* Dropzone - Only show if not processing and not all images processed */}
+        {!store.isProcessing && !allImagesProcessed && (
           <div
             {...getRootProps()}
-            className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer
-              ${isDragActive ? "border-primary bg-primary/10" : "border-border hover:border-primary/70"}
-              ${error ? "border-destructive" : ""}
-              transition-colors duration-200 ease-in-out`}
+            className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer mb-4
+            ${isDragActive ? "border-primary bg-primary/10" : "border-border hover:border-primary/70"}
+            ${store.error ? "border-destructive" : ""}
+            transition-colors duration-200 ease-in-out`}
           >
             <input {...getInputProps()} />
-            {previewUrl && selectedFile ? (
-              <div className="relative w-full h-64">
-                <Image
-                  src={previewUrl}
-                  alt={`Xem trước ${selectedFile.name}`}
-                  layout="fill"
-                  objectFit="contain"
-                  className="rounded-md"
-                />
-              </div>
-            ) : isDragActive ? (
-              <p className="text-primary">Thả ảnh vào đây...</p>
+            {isDragActive ? (
+              <p className="text-primary">Drop the images here...</p>
             ) : (
               <div className="text-center">
                 <svg
@@ -267,117 +451,112 @@ export function ImageUploadArea() {
                 </svg>
                 <p className="mb-2 text-sm text-muted-foreground">
                   <span className="font-semibold text-primary">
-                    Nhấp để tải lên
+                    Click to upload
                   </span>{" "}
-                  hoặc kéo thả
+                  or drag and drop
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Chỉ một ảnh (JPEG, PNG, WEBP, GIF)
+                  Multiple images (up to 20) - JPEG, PNG, WEBP, GIF
                 </p>
               </div>
             )}
           </div>
         )}
 
-        {error && !isUploading && !isEnhancing && (
-          <p className="mt-4 text-sm text-destructive text-center">{error}</p>
+        {/* Global Error Display */}
+        {store.error && (
+          <p className="mb-4 text-sm text-destructive text-center">
+            {store.error}
+          </p>
         )}
 
-        {(isUploading || isEnhancing) && (
-          <div className="flex flex-col items-center justify-center mt-4">
-            <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
-            <p className="text-sm text-muted-foreground">
-              {isUploading
-                ? "Đang tải ảnh lên..."
-                : "Đang xử lý ảnh, vui lòng chờ..."}
-            </p>
-          </div>
-        )}
-
-        {enhancedImageUrl && !isEnhancing && (
-          <div className="mt-6 text-center">
-            <h3 className="text-lg font-semibold mb-2">Ảnh Đã Xử Lý:</h3>
-            <div className="relative w-full max-w-md mx-auto h-auto aspect-video border rounded-md overflow-hidden">
-              <Image
-                src={enhancedImageUrl}
-                alt="Ảnh đã được xử lý"
-                layout="fill"
-                objectFit="contain"
-              />
+        {/* Image Thumbnails Grid */}
+        {store.images.length > 0 && (
+          <div className="mb-6">
+            <div className="flex justify-between items-center mb-2">
+              <h3 className="text-sm font-medium">
+                Images ({store.images.length})
+                {store.isProcessing && " - Processing..."}
+              </h3>
+              {/* Only show Remove All button if not all images processed */}
+              {!allImagesProcessed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveAll}
+                  className="text-xs"
+                >
+                  <X className="w-3 h-3 mr-1" /> Remove All
+                </Button>
+              )}
             </div>
-            <Button
-              onClick={() => {
-                toast.info("Thông báo", {
-                  description: "Chức năng tải xuống sẽ sớm được cập nhật.",
-                });
-              }}
-              className="mt-4 cursor-pointer"
-            >
-              Tải Xuống Ảnh
-            </Button>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
+              {store.images.map((image) => (
+                <ImageThumbnail
+                  key={image.id}
+                  image={image}
+                  isSelected={image.id === store.selectedImageId}
+                  onClick={() => store.selectImage(image.id)}
+                  onRemove={() => store.removeImage(image.id)}
+                  isProcessing={store.isProcessing}
+                />
+              ))}
+            </div>
           </div>
         )}
 
-        {falRequestId && !isEnhancing && !enhancedImageUrl && (
-          <div className="mt-6 text-center p-4 bg-blue-50 border border-blue-200 rounded-md">
-            <h3 className="text-lg font-semibold text-blue-700 mb-2">
-              Yêu Cầu Đang Được Xử Lý
-            </h3>
-            <p className="text-sm text-blue-600">
-              Ảnh của bạn đang được AI xử lý. Quá trình này có thể mất vài phút.
-            </p>
-            <p className="text-xs text-blue-500 mt-1">
-              Request ID: {falRequestId}
-            </p>
-            <p className="text-sm text-blue-600 mt-2">
-              Chúng tôi sẽ thông báo cho bạn khi hoàn tất (chức năng này sẽ được
-              cập nhật sau).
-            </p>
-          </div>
-        )}
+        {/* Selected Image Comparison */}
+        <SelectedImageCompare />
       </CardContent>
-      <CardFooter className="flex flex-col items-center gap-4 pt-4">
-        {/* Primary Action Button Area */}
-        {!isUploading && !isEnhancing && (
-          <>
-            {selectedFile && !enhancedImageUrl && !falRequestId && !error && (
-              <Button
-                onClick={handleEnhanceImage}
-                className="w-full max-w-xs cursor-pointer"
-              >
-                Enhance Image
-              </Button>
-            )}
 
-            {/* Button to start over or select a new image */}
-            {(enhancedImageUrl || falRequestId || error || !selectedFile) && (
+      <CardFooter className="flex flex-col items-center gap-4 pt-4">
+        {!store.isProcessing && (
+          <>
+            {/* Show "Start New Session" button if all images are processed */}
+            {allImagesProcessed ? (
               <Button
-                onClick={() => {
-                  if (
-                    !selectedFile &&
-                    !error &&
-                    !enhancedImageUrl &&
-                    !falRequestId
-                  ) {
-                    // If no file is selected and no error/result, try to trigger file input
-                    const inputElement =
-                      document.querySelector('input[type="file"]');
-                    if (inputElement instanceof HTMLElement) {
-                      inputElement.click();
-                      return; // Don't reset state yet, let user pick a file
-                    }
-                  }
-                  resetState();
-                }}
-                variant="outline"
+                onClick={handleStartNewSession}
                 className="w-full max-w-xs cursor-pointer"
               >
-                {enhancedImageUrl || falRequestId || error
-                  ? "Tải Lên Ảnh Khác"
-                  : "Chọn Ảnh Để Bắt Đầu"}
+                Start New Session
               </Button>
+            ) : (
+              <>
+                {/* Show "Select Images" button if no images are selected */}
+                {store.images.length === 0 ? (
+                  <Button
+                    onClick={() => {
+                      const inputElement =
+                        document.querySelector('input[type="file"]');
+                      if (inputElement instanceof HTMLElement) {
+                        inputElement.click();
+                      }
+                    }}
+                    className="w-full max-w-xs cursor-pointer"
+                  >
+                    Select Images to Start
+                  </Button>
+                ) : (
+                  /* Show "Enhance Images" button if images are selected but not yet processing */
+                  <Button
+                    onClick={handleEnhanceImages}
+                    className="w-full max-w-xs cursor-pointer"
+                  >
+                    Enhance {store.images.length > 1 ? "Images" : "Image"}
+                  </Button>
+                )}
+              </>
             )}
           </>
+        )}
+
+        {/* Show processing status when active */}
+        {store.isProcessing && (
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Loader2 className="w-4 h-4 animate-spin" />
+            <span>Processing images...</span>
+          </div>
         )}
       </CardFooter>
     </Card>

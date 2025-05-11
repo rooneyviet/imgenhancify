@@ -3,7 +3,7 @@
 import { ImageUploadArea } from "@/components/features/image-upload/ImageUploadArea";
 import { Button } from "@/components/ui/button";
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
-import { Toaster } from "sonner"; // Đảm bảo import Toaster
+import { Toaster } from "sonner"; // Ensure Toaster is imported
 
 export default function Home() {
   return (
@@ -13,7 +13,7 @@ export default function Home() {
           IMG Enhancify
         </h1>
         <p className="mt-2 text-lg text-muted-foreground">
-          Tải lên và nâng cao chất lượng ảnh của bạn một cách dễ dàng.
+          Upload and enhance the quality of your images with ease.
         </p>
       </header>
 

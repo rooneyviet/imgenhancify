@@ -6,7 +6,7 @@ export async function POST(request: NextRequest) {
   );
   try {
     const body = await request.json();
-    const providerDeleteUrl = body.provider_delete_url; // Changed from image_url
+    const providerDeleteUrl = body.provider_delete_url;
 
     if (!providerDeleteUrl) {
       console.error(
@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
     // We are wrapping it in our POST API for consistency or potential future needs.
     // No API key is needed for ImgBB deletion if you have the delete_url.
     const response = await fetch(providerDeleteUrl, {
-      method: "GET", // ImgBB delete links are usually GET
+      method: "GET",
       // ImgBB delete URLs are typically pre-signed and don't require auth headers.
       // However, their API for "deleting an image" (if different from delete_url) might.
       // For now, assuming delete_url is a direct GET.

@@ -28,32 +28,31 @@ export default function SignupPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
-            Tạo tài khoản
+            Create Account
           </CardTitle>
           <CardDescription className="text-center">
-            Tạo mã đăng nhập duy nhất của bạn.
+            Generate your unique login code.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           {!authCode ? (
             <Button onClick={generateAuthCode} className="w-full">
-              Tạo mã đăng nhập
+              Generate Login Code
             </Button>
           ) : (
             <div className="space-y-4">
               <Alert>
                 <Terminal className="h-4 w-4" />
-                <AlertTitle>Mã đăng nhập của bạn:</AlertTitle>
+                <AlertTitle>Your Login Code:</AlertTitle>
                 <AlertDescription className="font-mono text-lg break-all">
                   {authCode}
                 </AlertDescription>
               </Alert>
               <Alert variant="destructive">
                 <Terminal className="h-4 w-4" />
-                <AlertTitle>Quan trọng!</AlertTitle>
+                <AlertTitle>Important!</AlertTitle>
                 <AlertDescription>
-                  Vui lòng lưu lại mã này một cách cẩn thận. Bạn sẽ cần nó để
-                  đăng nhập.
+                  Please save this code carefully. You will need it to log in.
                 </AlertDescription>
               </Alert>
             </div>
@@ -61,12 +60,12 @@ export default function SignupPage() {
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-            Đã có tài khoản?{" "}
+            Already have an account?{" "}
             <Link
               href="/login"
               className="font-medium text-blue-600 hover:underline dark:text-blue-400"
             >
-              Đăng nhập
+              Login
             </Link>
           </p>
         </CardFooter>

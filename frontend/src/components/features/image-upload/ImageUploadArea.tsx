@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import { useDropzone, FileRejection, Accept } from "react-dropzone-esm";
-import { useImageUploadStore, ImageItem } from "@/lib/store/imageUploadStore";
-import { useImagePolling } from "@/hooks/useImagePolling";
+import { useDropzone } from "react-dropzone-esm";
+import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import {
   Card,
   CardContent,
@@ -14,279 +13,12 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import Image from "next/image";
-import { Loader2, X, Check, AlertCircle } from "lucide-react";
-import { ImageCompareResult, SelectedImageCompare } from "./ImageCompareResult";
-
-const acceptedFileTypes: Accept = {
-  "image/jpeg": [".jpg", ".jpeg"],
-  "image/png": [".png"],
-  "image/webp": [".webp"],
-  "image/gif": [".gif"],
-};
-
-// Component to handle individual image processing
-function ImageProcessor({ imageId }: { imageId: string }) {
-  const store = useImageUploadStore();
-  const image = store.images.find((img) => img.id === imageId);
-
-  useEffect(() => {
-    if (!image) return;
-
-    const processImage = async () => {
-      if (!image.isUploading) return;
-
-      try {
-        // Step 1: Upload image
-        const formData = new FormData();
-        formData.append("file", image.file);
-
-        const uploadResponse = await fetch("/api/upload-image", {
-          method: "POST",
-          body: formData,
-        });
-
-        if (!uploadResponse.ok) {
-          const errorData = await uploadResponse.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || "Original image upload failed. Please try again."
-          );
-        }
-
-        const uploadResult = await uploadResponse.json();
-        if (!uploadResult.imageUrl) {
-          throw new Error("Did not receive image URL from upload API.");
-        }
-
-        // Update image with uploaded URL and start enhancement
-        store.updateImage(imageId, {
-          isUploading: false,
-          isEnhancing: true,
-          uploadedImageUrl: uploadResult.imageUrl,
-        });
-
-        // Step 2: Enhance image
-        const enhanceResponse = await fetch("/api/enhance-image", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ image_url: uploadResult.imageUrl }),
-        });
-
-        if (!enhanceResponse.ok) {
-          const errorData = await enhanceResponse.json().catch(() => ({}));
-          throw new Error(
-            errorData.error || "Image processing failed. Please try again."
-          );
-        }
-
-        const enhanceResult = await enhanceResponse.json();
-
-        // Handle different enhancement results
-        if (enhanceResult.enhancedUrl) {
-          // Direct result
-          store.updateImage(imageId, {
-            isEnhancing: false,
-            enhancedImageUrl: enhanceResult.enhancedUrl,
-          });
-
-          // Process next image after delay
-          setTimeout(() => {
-            store.processNextImage();
-          }, 2000);
-        } else if (enhanceResult.status_url && enhanceResult.provider_name) {
-          // Need to poll for result
-          store.updateImage(imageId, {
-            isEnhancing: false,
-            falRequestId: enhanceResult.request_id || null,
-          });
-          store.startPolling(
-            imageId,
-            enhanceResult.status_url,
-            enhanceResult.provider_name
-          );
-        } else if (
-          enhanceResult.request_id &&
-          enhanceResult.status === "IN_QUEUE" &&
-          enhanceResult.status_url
-        ) {
-          // Fal.ai specific queue
-          store.updateImage(imageId, {
-            isEnhancing: false,
-            falRequestId: enhanceResult.request_id,
-          });
-          store.startPolling(imageId, enhanceResult.status_url, "fal");
-        } else {
-          // Unexpected result
-          store.updateImage(imageId, {
-            isEnhancing: false,
-            error:
-              enhanceResult.error ||
-              "Did not receive necessary information from API.",
-          });
-
-          // Process next image after delay
-          setTimeout(() => {
-            store.processNextImage();
-          }, 2000);
-        }
-      } catch (error: any) {
-        console.error("Error processing image:", error);
-        store.updateImage(imageId, {
-          isUploading: false,
-          isEnhancing: false,
-          isPolling: false,
-          error: error.message || "An error occurred during processing.",
-        });
-
-        // Process next image after delay
-        setTimeout(() => {
-          store.processNextImage();
-        }, 2000);
-      }
-    };
-
-    if (image.isUploading) {
-      processImage();
-    }
-  }, [imageId, image, store]);
-
-  return null; // This is a logic-only component
-}
-
-// Thumbnail component for an individual image
-function ImageThumbnail({
-  image,
-  isSelected,
-  onClick,
-  onRemove,
-  isProcessing,
-}: {
-  image: ImageItem;
-  isSelected: boolean;
-  onClick: () => void;
-  onRemove: () => void;
-  isProcessing: boolean;
-}) {
-  const getStatusIndicator = () => {
-    if (image.isUploading) {
-      return (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
-          <Loader2 className="w-6 h-6 animate-spin text-white" />
-          <span className="text-xs text-white ml-2">Uploading</span>
-        </div>
-      );
-    }
-
-    if (image.isPolling || image.isEnhancing) {
-      return (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
-          <Loader2 className="w-6 h-6 animate-spin text-white" />
-          <span className="text-xs text-white ml-2">Processing</span>
-        </div>
-      );
-    }
-
-    if (image.error || image.pollingError) {
-      return (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
-          <AlertCircle className="w-6 h-6 text-red-500" />
-        </div>
-      );
-    }
-
-    if (image.enhancedImageUrl) {
-      return (
-        <div className="absolute top-1 right-1 bg-green-500 rounded-full p-1">
-          <Check className="w-4 h-4 text-white" />
-        </div>
-      );
-    }
-
-    return null;
-  };
-
-  // Determine if this image is selectable (only processed images are selectable)
-  const isSelectable = image.enhancedImageUrl !== null;
-
-  // Show remove button only if not processing and not yet enhanced
-  const showRemoveButton =
-    !isProcessing &&
-    !image.isUploading &&
-    !image.isEnhancing &&
-    !image.isPolling &&
-    !image.enhancedImageUrl; // Hide remove button after image is processed
-
-  return (
-    <div
-      className={`relative w-24 h-24 border rounded-md overflow-hidden transition-all
-        ${isSelectable && isSelected ? "ring-2 ring-primary" : ""}
-        ${image.enhancedImageUrl ? "border-green-500 cursor-pointer" : "border-gray-200"}
-        ${image.error || image.pollingError ? "border-red-500" : ""}
-      `}
-      onClick={isSelectable ? onClick : undefined}
-      title={image.file.name}
-    >
-      {image.previewUrl && (
-        <Image
-          src={image.previewUrl}
-          alt={image.file.name}
-          layout="fill"
-          objectFit="cover"
-          className="rounded-md"
-        />
-      )}
-      {getStatusIndicator()}
-
-      {/* Remove button */}
-      {showRemoveButton && (
-        <button
-          className="absolute top-1 right-1 bg-red-500 rounded-full p-1 z-10 hover:bg-red-600 transition-colors"
-          onClick={(e) => {
-            e.stopPropagation(); // Prevent triggering the parent onClick
-            onRemove();
-          }}
-          title="Remove image"
-        >
-          <X className="w-3 h-3 text-white" />
-        </button>
-      )}
-    </div>
-  );
-}
-
-// Component to handle polling for multiple images
-function ImagePollingManager() {
-  const store = useImageUploadStore();
-  const [pollingImages, setPollingImages] = useState<string[]>([]);
-
-  // Find all images that need polling
-  useEffect(() => {
-    const imagesToPoll = store.images
-      .filter(
-        (img) =>
-          img.isPolling && img.pollingStatusUrl && img.pollingProviderName
-      )
-      .map((img) => img.id);
-
-    setPollingImages(imagesToPoll);
-  }, [store.images]);
-
-  return (
-    <>
-      {pollingImages.map((imageId) => (
-        <PollingHandler key={imageId} imageId={imageId} />
-      ))}
-    </>
-  );
-}
-
-// Individual polling handler component
-function PollingHandler({ imageId }: { imageId: string }) {
-  const { initiatePolling } = useImagePolling({ imageId });
-
-  // This component doesn't render anything, it just sets up the polling
-  return null;
-}
+import { Loader2, X } from "lucide-react";
+import { SelectedImageCompare } from "./ImageCompareResult";
+import { ImageProcessor } from "./ImageProcessor";
+import { ImageThumbnail } from "./ImageThumbnail";
+import { ImagePollingManager } from "./ImagePollingManager";
+import { acceptedFileTypes, MAX_IMAGES } from "./constants";
 
 export function ImageUploadArea() {
   const store = useImageUploadStore();
@@ -328,12 +60,14 @@ export function ImageUploadArea() {
   };
 
   const onDrop = useCallback(
-    (acceptedFiles: File[], fileRejections: FileRejection[]) => {
+    (acceptedFiles: File[], fileRejections: any[]) => {
       if (fileRejections.length > 0) {
         const firstRejection = fileRejections[0];
         let message = "An error occurred while uploading the file.";
 
-        if (firstRejection.errors.some((e) => e.code === "file-invalid-type")) {
+        if (
+          firstRejection.errors.some((e: any) => e.code === "file-invalid-type")
+        ) {
           message = "Invalid file. Please select an image file.";
         }
 
@@ -346,7 +80,6 @@ export function ImageUploadArea() {
         // Check if adding these would exceed the limit
         const currentCount = store.images.length;
         const newCount = currentCount + acceptedFiles.length;
-        const MAX_IMAGES = 20;
 
         if (newCount > MAX_IMAGES) {
           const canAdd = MAX_IMAGES - currentCount;
@@ -382,7 +115,7 @@ export function ImageUploadArea() {
     onDrop,
     accept: acceptedFileTypes,
     multiple: true,
-    maxFiles: 20,
+    maxFiles: MAX_IMAGES,
   });
 
   const handleRemoveAll = () => {
@@ -408,7 +141,7 @@ export function ImageUploadArea() {
       <CardHeader>
         <CardTitle>Enhance Image Quality</CardTitle>
         <CardDescription>
-          Upload up to 20 images to improve their quality using AI.
+          Upload up to {MAX_IMAGES} images to improve their quality using AI.
         </CardDescription>
       </CardHeader>
 
@@ -456,7 +189,7 @@ export function ImageUploadArea() {
                   or drag and drop
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Multiple images (up to 20) - JPEG, PNG, WEBP, GIF
+                  Multiple images (up to {MAX_IMAGES}) - JPEG, PNG, WEBP, GIF
                 </p>
               </div>
             )}

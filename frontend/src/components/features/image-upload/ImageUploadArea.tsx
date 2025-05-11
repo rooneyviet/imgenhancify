@@ -13,12 +13,13 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Loader2, X } from "lucide-react";
+import { Download, Loader2, X } from "lucide-react";
 import { SelectedImageCompare } from "./ImageCompareResult";
 import { ImageProcessor } from "./ImageProcessor";
 import { ImageThumbnail } from "./ImageThumbnail";
 import { ImagePollingManager } from "./ImagePollingManager";
 import { acceptedFileTypes, MAX_IMAGES } from "./constants";
+import JSZip from "jszip";
 
 export function ImageUploadArea() {
   const store = useImageUploadStore();
@@ -130,10 +131,99 @@ export function ImageUploadArea() {
       (img) => img.enhancedImageUrl || img.error || img.pollingError
     );
 
+  // Get successful images (those with enhancedImageUrl and no errors)
+  const successfulImages = store.images.filter(
+    (img) => img.enhancedImageUrl && !img.error && !img.pollingError
+  );
+
+  // Determine if we should show the download button
+  const showDownloadButton = allImagesProcessed && successfulImages.length > 0;
+
   // Start a new session by resetting the state
   const handleStartNewSession = () => {
     store.resetState();
     toast.info("Ready for new images");
+  };
+
+  // Handle downloading a single image
+  const downloadSingleImage = async (imageUrl: string, fileName: string) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+
+      // Create a download link
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Image downloaded successfully");
+    } catch (error) {
+      console.error("Error downloading image:", error);
+      toast.error("Failed to download image");
+    }
+  };
+
+  // Handle downloading multiple images as a zip file
+  const downloadImagesAsZip = async (
+    images: Array<{ url: string; name: string }>
+  ) => {
+    try {
+      const zip = new JSZip();
+
+      // Add each image to the zip
+      const promises = images.map(async (image, index) => {
+        const response = await fetch(image.url);
+        const blob = await response.blob();
+        zip.file(image.name, blob);
+      });
+
+      // Wait for all images to be added to the zip
+      await Promise.all(promises);
+
+      // Generate the zip file
+      const zipBlob = await zip.generateAsync({ type: "blob" });
+
+      // Create a download link
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(zipBlob);
+      link.download = "enhanced-images.zip";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      toast.success("Images downloaded successfully");
+    } catch (error) {
+      console.error("Error creating zip file:", error);
+      toast.error("Failed to download images");
+    }
+  };
+
+  // Handle the download button click
+  const handleDownload = async () => {
+    if (successfulImages.length === 0) return;
+
+    if (successfulImages.length === 1) {
+      // Download single image
+      const image = successfulImages[0];
+      if (image.enhancedImageUrl) {
+        const fileName =
+          image.file.name.replace(/\.[^/.]+$/, "") + "-enhanced.jpg";
+        await downloadSingleImage(image.enhancedImageUrl, fileName);
+      }
+    } else {
+      // Download multiple images as zip
+      const imagesToDownload = successfulImages
+        .filter((img) => img.enhancedImageUrl)
+        .map((img) => ({
+          url: img.enhancedImageUrl as string,
+          name: img.file.name.replace(/\.[^/.]+$/, "") + "-enhanced.jpg",
+        }));
+
+      await downloadImagesAsZip(imagesToDownload);
+    }
   };
 
   return (
@@ -248,12 +338,25 @@ export function ImageUploadArea() {
           <>
             {/* Show "Start New Session" button if all images are processed */}
             {allImagesProcessed ? (
-              <Button
-                onClick={handleStartNewSession}
-                className="w-full max-w-xs cursor-pointer"
-              >
-                Start New Session
-              </Button>
+              <div className="flex flex-col w-full items-center gap-3">
+                {/* Show Download button if there are successful images */}
+                {showDownloadButton && (
+                  <Button
+                    onClick={handleDownload}
+                    variant="outline"
+                    className="w-full max-w-xs cursor-pointer flex items-center gap-2"
+                  >
+                    <Download className="w-4 h-4" />
+                    Download {successfulImages.length > 1 ? "Images" : "Image"}
+                  </Button>
+                )}
+                <Button
+                  onClick={handleStartNewSession}
+                  className="w-full max-w-xs cursor-pointer"
+                >
+                  Start New Session
+                </Button>
+              </div>
             ) : (
               <>
                 {/* Show "Select Images" button if no images are selected */}

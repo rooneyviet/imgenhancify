@@ -177,16 +177,7 @@ function ImageThumbnail({
       );
     }
 
-    if (image.isEnhancing) {
-      return (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
-          <Loader2 className="w-6 h-6 animate-spin text-white" />
-          <span className="text-xs text-white ml-2">Enhancing</span>
-        </div>
-      );
-    }
-
-    if (image.isPolling) {
+    if (image.isPolling || image.isEnhancing) {
       return (
         <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-md">
           <Loader2 className="w-6 h-6 animate-spin text-white" />
@@ -217,12 +208,13 @@ function ImageThumbnail({
   // Determine if this image is selectable (only processed images are selectable)
   const isSelectable = image.enhancedImageUrl !== null;
 
-  // Show remove button only if not processing
+  // Show remove button only if not processing and not yet enhanced
   const showRemoveButton =
     !isProcessing &&
     !image.isUploading &&
     !image.isEnhancing &&
-    !image.isPolling;
+    !image.isPolling &&
+    !image.enhancedImageUrl; // Hide remove button after image is processed
 
   return (
     <div
@@ -398,6 +390,19 @@ export function ImageUploadArea() {
     toast.info("All images removed");
   };
 
+  // Check if all images have been processed
+  const allImagesProcessed =
+    store.images.length > 0 &&
+    store.images.every(
+      (img) => img.enhancedImageUrl || img.error || img.pollingError
+    );
+
+  // Start a new session by resetting the state
+  const handleStartNewSession = () => {
+    store.resetState();
+    toast.info("Ready for new images");
+  };
+
   return (
     <Card className="w-full max-w-4xl mx-auto">
       <CardHeader>
@@ -416,8 +421,8 @@ export function ImageUploadArea() {
         {/* Polling manager for all images that need polling */}
         <ImagePollingManager />
 
-        {/* Dropzone - Only show if not processing */}
-        {!store.isProcessing && (
+        {/* Dropzone - Only show if not processing and not all images processed */}
+        {!store.isProcessing && !allImagesProcessed && (
           <div
             {...getRootProps()}
             className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer mb-4
@@ -473,14 +478,17 @@ export function ImageUploadArea() {
                 Images ({store.images.length})
                 {store.isProcessing && " - Processing..."}
               </h3>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleRemoveAll}
-                className="text-xs"
-              >
-                <X className="w-3 h-3 mr-1" /> Remove All
-              </Button>
+              {/* Only show Remove All button if not all images processed */}
+              {!allImagesProcessed && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRemoveAll}
+                  className="text-xs"
+                >
+                  <X className="w-3 h-3 mr-1" /> Remove All
+                </Button>
+              )}
             </div>
 
             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
@@ -505,28 +513,40 @@ export function ImageUploadArea() {
       <CardFooter className="flex flex-col items-center gap-4 pt-4">
         {!store.isProcessing && (
           <>
-            {/* Show "Select Images" button if no images are selected */}
-            {store.images.length === 0 ? (
+            {/* Show "Start New Session" button if all images are processed */}
+            {allImagesProcessed ? (
               <Button
-                onClick={() => {
-                  const inputElement =
-                    document.querySelector('input[type="file"]');
-                  if (inputElement instanceof HTMLElement) {
-                    inputElement.click();
-                  }
-                }}
+                onClick={handleStartNewSession}
                 className="w-full max-w-xs cursor-pointer"
               >
-                Select Images to Start
+                Start New Session
               </Button>
             ) : (
-              /* Show "Enhance Images" button if images are selected but not yet processing */
-              <Button
-                onClick={handleEnhanceImages}
-                className="w-full max-w-xs cursor-pointer"
-              >
-                Enhance {store.images.length > 1 ? "Images" : "Image"}
-              </Button>
+              <>
+                {/* Show "Select Images" button if no images are selected */}
+                {store.images.length === 0 ? (
+                  <Button
+                    onClick={() => {
+                      const inputElement =
+                        document.querySelector('input[type="file"]');
+                      if (inputElement instanceof HTMLElement) {
+                        inputElement.click();
+                      }
+                    }}
+                    className="w-full max-w-xs cursor-pointer"
+                  >
+                    Select Images to Start
+                  </Button>
+                ) : (
+                  /* Show "Enhance Images" button if images are selected but not yet processing */
+                  <Button
+                    onClick={handleEnhanceImages}
+                    className="w-full max-w-xs cursor-pointer"
+                  >
+                    Enhance {store.images.length > 1 ? "Images" : "Image"}
+                  </Button>
+                )}
+              </>
             )}
           </>
         )}

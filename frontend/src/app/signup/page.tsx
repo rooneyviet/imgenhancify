@@ -14,13 +14,32 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
+import { createUser } from "../actions/auth";
 
 export default function SignupPage() {
   const [authCode, setAuthCode] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const generateAuthCode = () => {
-    const newCode = uuidv4().substring(0, 16);
-    setAuthCode(newCode);
+  const generateAuthCode = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const newCode = uuidv4().substring(0, 16);
+      const result = await createUser(newCode);
+
+      if (result.success) {
+        setAuthCode(newCode);
+      } else {
+        setError(result.error || "Failed to create account. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error generating auth code:", err);
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -35,9 +54,21 @@ export default function SignupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <Terminal className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           {!authCode ? (
-            <Button onClick={generateAuthCode} className="w-full">
-              Generate Login Code
+            <Button
+              onClick={generateAuthCode}
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? "Creating Account..." : "Generate Login Code"}
             </Button>
           ) : (
             <div className="space-y-4">
@@ -53,6 +84,7 @@ export default function SignupPage() {
                 <AlertTitle>Important!</AlertTitle>
                 <AlertDescription>
                   Please save this code carefully. You will need it to log in.
+                  This code is now stored in the database.
                 </AlertDescription>
               </Alert>
             </div>

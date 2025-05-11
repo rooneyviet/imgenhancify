@@ -15,28 +15,43 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import { useAuthStore } from "@/lib/store/authStore";
+import { verifyAuthCode } from "../actions/auth";
 
 export default function LoginPage() {
   const [authCode, setAuthCode] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
   const { login, error: authError, setError: setAuthError } = useAuthStore();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!authCode.trim()) {
       setAuthError("Code cannot be empty.");
       return;
     }
+
+    setIsLoading(true);
     setAuthError(null);
-    console.log("Entered login code:", authCode);
-    login(authCode);
-    // After calling login, authStore.isAuthenticated will be updated
-    // We can redirect the user or display a success message here
-    // Example: if (useAuthStore.getState().isAuthenticated) router.push('/');
-    // For now, just log to console and rely on alert from store (if any) or logic in store
-    if (useAuthStore.getState().isAuthenticated) {
-      alert(`Login successful with code: ${authCode}.`);
-      // Redirection can be added here, e.g., router.push('/')
-    } else {
-      // Error has been set in the store and will be displayed via authError
+
+    try {
+      // Verify the auth code against the database
+      const result = await verifyAuthCode(authCode);
+
+      if (result.success) {
+        // If verification is successful, update the auth store
+        login(authCode);
+
+        if (useAuthStore.getState().isAuthenticated) {
+          alert(`Login successful with code: ${authCode}.`);
+          // Redirection can be added here, e.g., router.push('/')
+        }
+      } else {
+        // If verification fails, set the error
+        setAuthError(result.error || "Invalid authentication code.");
+      }
+    } catch (err) {
+      console.error("Error during login:", err);
+      setAuthError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -66,8 +81,8 @@ export default function LoginPage() {
               <AlertDescription>{authError}</AlertDescription>
             </Alert>
           )}
-          <Button onClick={handleLogin} className="w-full">
-            Login
+          <Button onClick={handleLogin} className="w-full" disabled={isLoading}>
+            {isLoading ? "Verifying..." : "Login"}
           </Button>
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">

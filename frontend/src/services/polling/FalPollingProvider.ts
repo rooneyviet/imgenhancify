@@ -54,7 +54,6 @@ export class FalPollingProvider implements PollingProvider {
           pollingStatus = "COMPLETED";
           break;
         default:
-          // If Fal.ai returns an unexpected status
           console.warn("Unknown status from Fal.ai:", falResponse.status);
           // Assume it's processing to continue polling, or could be considered FAILED depending on logic
           pollingStatus = "IN_PROGRESS";
@@ -199,10 +198,10 @@ export class FalPollingProvider implements PollingProvider {
   }
 
   public getPollingInterval(): number {
-    return 3000; // 1 second
+    return 3000; // 1000 = 1 second
   }
 
   public getMaxPollingDuration(): number {
-    return 300000; // 5 minutes
+    return 300000;
   }
 }

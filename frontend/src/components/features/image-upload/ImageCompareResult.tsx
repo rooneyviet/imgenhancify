@@ -37,10 +37,9 @@ export function ImageCompareResult({
   }, []);
 
   if (!originalImageUrl || !enhancedImageUrl) {
-    return null; // Don't render if either image is missing
+    return null;
   }
 
-  // Ensure this component only renders on the client-side
   if (typeof window === "undefined") {
     return null;
   }

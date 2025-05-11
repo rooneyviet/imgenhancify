@@ -1,11 +1,11 @@
 import { useQuery, Query } from "@tanstack/react-query";
-import { useEffect } from "react"; // Import useEffect
+import { useEffect } from "react";
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 
 interface PollImageStatusPayload {
   providerName: string;
   statusUrl: string;
-  apiKeyName?: string; // Optional, as per requirements
+  apiKeyName?: string;
 }
 
 interface PollImageStatusResponse {
@@ -15,11 +15,11 @@ interface PollImageStatusResponse {
   status?: string; // e.g., "IN_PROGRESS", "COMPLETED", "ERROR"
   error?: any;
   logs?: any[];
-  interim_images?: any[]; // If the API supports interim results
+  interim_images?: any[];
 }
 
-const POLLING_INTERVAL = 3000; // Poll every 3 seconds
-const MAX_POLLING_ATTEMPTS = 20; // Stop after 20 attempts (1 minute)
+const POLLING_INTERVAL = 3000;
+const MAX_POLLING_ATTEMPTS = 20;
 
 async function pollImageStatus(
   payload: PollImageStatusPayload
@@ -75,8 +75,6 @@ export const useImagePolling = () => {
 
   const queryFn = () => {
     if (!pollingStatusUrl || !pollingProviderName) {
-      // This should ideally not be reached if 'enabled' logic is correct,
-      // but it's a safeguard.
       throw new Error(
         "Polling attempted without required URL or provider name."
       );
@@ -151,13 +149,11 @@ export const useImagePolling = () => {
       if (failureCount >= 2) return false;
       return true;
     },
-    // onSuccess and onError are removed from options and handled by useEffect below
   });
 
   useEffect(() => {
     const storeActions = useImageUploadStore.getState();
     if (data) {
-      // `data` is from the useQuery destructuring
       if (data.imageUrl) {
         storeActions.setEnhancedImageUrl(data.imageUrl);
       } else if (data.status === "COMPLETED" && !data.imageUrl) {

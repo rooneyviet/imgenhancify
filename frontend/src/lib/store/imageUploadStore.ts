@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 interface ImageUploadState {
   selectedFile: File | null;
-  previewUrl: string | null; // This is effectively the originalImageUrl after selection
+  previewUrl: string | null;
   error: string | null;
   isUploading: boolean;
   isEnhancing: boolean;
@@ -18,7 +18,7 @@ interface ImageUploadState {
   // it can be added. For now, previewUrl serves this role.
 
   setSelectedFile: (file: File | null) => void;
-  setPreviewUrl: (url: string | null) => void; // Already serves as original image url
+  setPreviewUrl: (url: string | null) => void;
   setError: (error: string | null) => void;
   setIsUploading: (isUploading: boolean) => void;
   setIsEnhancing: (isEnhancing: boolean) => void;
@@ -45,7 +45,7 @@ export const useImageUploadStore = create<ImageUploadState>((set, get) => ({
   falRequestId: null,
   pollingStatusUrl: null,
   pollingProviderName: null,
-  pollingError: null, // Initialize new state
+  pollingError: null,
   setSelectedFile: (file) => {
     set({
       selectedFile: file,

@@ -1,9 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-// Removed ReactCompareImage import, it's now in ImageCompareResult.tsx
 import { useDropzone, FileRejection, Accept } from "react-dropzone-esm";
-import { useImagePolling } from "@/hooks/useImagePolling"; // Import new hook
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import {
   Card,
@@ -17,8 +15,8 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
-// No longer explicitly needed here
-import { ImageCompareResult } from "./ImageCompareResult"; // Import the new component
+import { ImageCompareResult } from "./ImageCompareResult";
+import { useImagePolling } from "@/hooks/useImagePolling";
 
 const acceptedFileTypes: Accept = {
   "image/jpeg": [".jpg", ".jpeg"],
@@ -38,15 +36,12 @@ export function ImageUploadArea() {
     enhancedImageUrl,
     falRequestId,
     pollingStatusUrl,
-    // pollingProviderName, // Not directly used here, hook handles it
     setSelectedFile,
     setError,
     setIsUploading,
     setIsEnhancing,
-    // setIsPolling, // Managed by hook/store actions
     setEnhancedImageUrl,
     setFalRequestId,
-    // setPollingInfo, // Managed by hook/store actions
     resetState,
     pollingError,
   } = useImageUploadStore();
@@ -65,8 +60,8 @@ export function ImageUploadArea() {
     setError(null); // Clear general error
     setEnhancedImageUrl(null);
     setFalRequestId(null);
-    useImageUploadStore.getState().setPollingError(null); // Reset polling error explicitly
-    useImageUploadStore.getState().setIsPolling(false); // Ensure polling is stopped before starting a new one
+    useImageUploadStore.getState().setPollingError(null);
+    useImageUploadStore.getState().setIsPolling(false);
 
     let uploadedImageUrl: string | null = null;
 
@@ -392,7 +387,6 @@ export function ImageUploadArea() {
         {!isUploading && !isEnhancing && !isPolling && (
           <>
             {/* Enhance Button: Show if a file is selected, no results yet, and no pending polling, and no errors */}
-            {/* Enhance Button: Show if a file is selected, no results yet, and no pending polling, and no errors */}
             {selectedFile &&
               !enhancedImageUrl && // Only show if no enhanced image yet (ReactCompareImage will handle display if present)
               !pollingStatusUrl &&
@@ -414,44 +408,41 @@ export function ImageUploadArea() {
                 - There's a polling error
                 - No file is selected (initial state)
             */}
-            {(previewUrl && enhancedImageUrl) || // If comparison is shown
-              pollingStatusUrl || // If a process was started
-              error || // If there was a general error
-              pollingError || // If there was a polling error
-              !selectedFile || // Initial state or after reset
-              (selectedFile &&
-                !enhancedImageUrl &&
-                !pollingStatusUrl && ( // File selected, but not yet enhanced (allows to change mind)
-                  <Button
-                    onClick={() => {
-                      // If in a clean state (no file, no errors, no results), and we want to select a file
-                      if (
-                        !selectedFile &&
-                        !error &&
-                        !pollingError &&
-                        !enhancedImageUrl &&
-                        !pollingStatusUrl
-                      ) {
-                        const inputElement =
-                          document.querySelector('input[type="file"]');
-                        if (inputElement instanceof HTMLElement) {
-                          inputElement.click();
-                          return; // Prevent resetState if just opening file dialog
-                        }
+            {(previewUrl && enhancedImageUrl) ||
+              pollingStatusUrl ||
+              error ||
+              pollingError ||
+              !selectedFile ||
+              (selectedFile && !enhancedImageUrl && !pollingStatusUrl && (
+                <Button
+                  onClick={() => {
+                    if (
+                      !selectedFile &&
+                      !error &&
+                      !pollingError &&
+                      !enhancedImageUrl &&
+                      !pollingStatusUrl
+                    ) {
+                      const inputElement =
+                        document.querySelector('input[type="file"]');
+                      if (inputElement instanceof HTMLElement) {
+                        inputElement.click();
+                        return; // Prevent resetState if just opening file dialog
                       }
-                      resetState(); // Otherwise, reset everything to clear comparison, errors, etc.
-                    }}
-                    variant="outline"
-                    className="w-full max-w-xs cursor-pointer"
-                  >
-                    {(previewUrl && enhancedImageUrl) ||
-                    pollingStatusUrl ||
-                    error ||
-                    pollingError
-                      ? "Upload Another Image"
-                      : "Select Image to Start"}
-                  </Button>
-                ))}
+                    }
+                    resetState();
+                  }}
+                  variant="outline"
+                  className="w-full max-w-xs cursor-pointer"
+                >
+                  {(previewUrl && enhancedImageUrl) ||
+                  pollingStatusUrl ||
+                  error ||
+                  pollingError
+                    ? "Upload Another Image"
+                    : "Select Image to Start"}
+                </Button>
+              ))}
           </>
         )}
       </CardFooter>

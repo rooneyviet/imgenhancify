@@ -1,6 +1,6 @@
 import { useQuery, Query } from "@tanstack/react-query";
-import { useEffect } from "react";
-import { useImageUploadStore } from "@/lib/store/imageUploadStore";
+import { useEffect, useState } from "react";
+import { useImageUploadStore, ImageItem } from "@/lib/store/imageUploadStore";
 
 interface PollImageStatusPayload {
   providerName: string;
@@ -57,32 +57,51 @@ async function pollImageStatus(
   return response.json();
 }
 
-export const useImagePolling = () => {
-  const {
-    pollingStatusUrl,
-    pollingProviderName,
-    setIsPolling,
-    setEnhancedImageUrl,
-    setPollingError,
-    startPolling, // Use the new action
-    isPolling,
-  } = useImageUploadStore();
+interface UseImagePollingProps {
+  imageId: string;
+}
 
-  const queryKey = ["pollImageStatus", pollingStatusUrl, pollingProviderName];
+export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
+  const store = useImageUploadStore();
+  const [image, setImage] = useState<ImageItem | undefined>(
+    store.images.find((img) => img.id === imageId)
+  );
 
-  // This query will only be enabled if pollingStatusUrl and pollingProviderName are set,
-  // and isPolling is true.
+  // Update the image reference when it changes in the store
+  useEffect(() => {
+    const updateImage = () => {
+      const currentImage = useImageUploadStore
+        .getState()
+        .images.find((img) => img.id === imageId);
+      setImage(currentImage);
+    };
+
+    // Initial update
+    updateImage();
+
+    // Subscribe to store changes
+    const unsubscribe = useImageUploadStore.subscribe(updateImage);
+    return () => unsubscribe();
+  }, [imageId]);
+
+  const queryKey = [
+    "pollImageStatus",
+    imageId,
+    image?.pollingStatusUrl,
+    image?.pollingProviderName,
+  ];
 
   const queryFn = () => {
-    if (!pollingStatusUrl || !pollingProviderName) {
+    if (!image || !image.pollingStatusUrl || !image.pollingProviderName) {
       throw new Error(
         "Polling attempted without required URL or provider name."
       );
     }
     return pollImageStatus({
-      statusUrl: pollingStatusUrl,
-      providerName: pollingProviderName,
-      apiKeyName: pollingProviderName === "fal" ? "FAL_AI_KEY" : undefined,
+      statusUrl: image.pollingStatusUrl,
+      providerName: image.pollingProviderName,
+      apiKeyName:
+        image.pollingProviderName === "fal" ? "FAL_AI_KEY" : undefined,
     });
   };
 
@@ -90,17 +109,15 @@ export const useImagePolling = () => {
     PollImageStatusResponse,
     Error,
     PollImageStatusResponse,
-    typeof queryKey // Use typeof queryKey for the QueryKey type
+    typeof queryKey
   >({
-    // Pass a single options object
     queryKey: queryKey,
     queryFn: queryFn,
-    enabled: !!pollingStatusUrl && !!pollingProviderName && isPolling,
+    enabled:
+      !!image?.pollingStatusUrl &&
+      !!image?.pollingProviderName &&
+      !!image?.isPolling,
     refetchInterval: (
-      // data: PollImageStatusResponse | undefined, // data is the first argument
-      // query: Query<PollImageStatusResponse, Error, PollImageStatusResponse, typeof queryKey> // query is the second argument
-      // TanStack Query v5 for useQuery's refetchInterval, the first param is the data, second is the query object.
-      // Let's ensure the type for query is correct.
       query: Query<
         PollImageStatusResponse,
         Error,
@@ -108,7 +125,7 @@ export const useImagePolling = () => {
         typeof queryKey
       >
     ) => {
-      const currentData = query.state.data; // Access data from query.state
+      const currentData = query.state.data;
       const storeActions = useImageUploadStore.getState();
 
       if (currentData?.imageUrl) {
@@ -123,20 +140,23 @@ export const useImagePolling = () => {
         currentData?.status === "COMPLETED" ||
         currentData?.status === "ERROR"
       ) {
-        // onSuccess will handle these cases by calling setPollingError if needed.
         return false;
       }
 
       // Check for max polling attempts
-      // query.state.dataUpdateCount counts successful fetches.
-      // We should count total fetches or time. Let's use dataUpdateCount for now.
       if (query.state.dataUpdateCount + 1 >= MAX_POLLING_ATTEMPTS) {
         if (!currentData?.imageUrl) {
           // Use a microtask to defer store update slightly
           Promise.resolve().then(() => {
-            storeActions.setPollingError(
-              `Polling timed out after ${MAX_POLLING_ATTEMPTS} attempts. Last status: ${currentData?.status || "unknown"}.`
-            );
+            storeActions.updateImage(imageId, {
+              isPolling: false,
+              pollingError: `Polling timed out after ${MAX_POLLING_ATTEMPTS} attempts. Last status: ${currentData?.status || "unknown"}.`,
+            });
+
+            // Process next image in queue after a delay
+            setTimeout(() => {
+              storeActions.processNextImage();
+            }, 2000); // 2-second delay as specified in requirements
           });
         }
         return false; // Stop polling
@@ -153,59 +173,91 @@ export const useImagePolling = () => {
 
   useEffect(() => {
     const storeActions = useImageUploadStore.getState();
-    if (data) {
+    if (data && image) {
       if (data.imageUrl) {
-        storeActions.setEnhancedImageUrl(data.imageUrl);
+        storeActions.updateImage(imageId, {
+          enhancedImageUrl: data.imageUrl,
+          isPolling: false,
+        });
+
+        // Process next image in queue after a delay
+        setTimeout(() => {
+          storeActions.processNextImage();
+        }, 2000); // 2-second delay as specified in requirements
       } else if (data.status === "COMPLETED" && !data.imageUrl) {
-        storeActions.setPollingError(
-          data.message || "Processing completed but no image URL was returned."
-        );
-      } else if (data.status === "ERROR") {
-        storeActions.setPollingError(
-          data.error?.message ||
+        storeActions.updateImage(imageId, {
+          isPolling: false,
+          pollingError:
             data.message ||
-            `Image processing failed with status: ${data.status}`
-        );
+            "Processing completed but no image URL was returned.",
+        });
+
+        // Process next image in queue after a delay
+        setTimeout(() => {
+          storeActions.processNextImage();
+        }, 2000);
+      } else if (data.status === "ERROR") {
+        storeActions.updateImage(imageId, {
+          isPolling: false,
+          pollingError:
+            data.error?.message ||
+            data.message ||
+            `Image processing failed with status: ${data.status}`,
+        });
+
+        // Process next image in queue after a delay
+        setTimeout(() => {
+          storeActions.processNextImage();
+        }, 2000);
       } else if (
         data.status &&
         data.status !== "IN_PROGRESS" &&
         data.status !== "COMPLETED"
       ) {
-        // This handles other unexpected final statuses.
-        // COMPLETED without imageUrl is handled above.
-        storeActions.setPollingError(
-          data.error?.message ||
+        storeActions.updateImage(imageId, {
+          isPolling: false,
+          pollingError:
+            data.error?.message ||
             data.message ||
-            `Image processing resulted in an unexpected status: ${data.status}`
-        );
+            `Image processing resulted in an unexpected status: ${data.status}`,
+        });
+
+        // Process next image in queue after a delay
+        setTimeout(() => {
+          storeActions.processNextImage();
+        }, 2000);
       }
-      // isPolling is set to false by setEnhancedImageUrl or setPollingError in the store
     }
-  }, [data]); // Rerun when data changes
+  }, [data, imageId, image]);
 
   useEffect(() => {
-    if (error) {
-      // `error` is from the useQuery destructuring
-      useImageUploadStore
-        .getState()
-        .setPollingError(
-          error.message || "An unknown error occurred during polling."
-        );
-      // isPolling is set to false by setPollingError in the store
-    }
-  }, [error]); // Rerun when error changes
+    if (error && image) {
+      const storeActions = useImageUploadStore.getState();
+      storeActions.updateImage(imageId, {
+        isPolling: false,
+        pollingError:
+          error.message || "An unknown error occurred during polling.",
+      });
 
-  // Function to manually trigger the start of polling,
-  // which will set the necessary store states and enable the useQuery.
+      // Process next image in queue after a delay
+      setTimeout(() => {
+        storeActions.processNextImage();
+      }, 2000);
+    }
+  }, [error, imageId, image]);
+
+  // Function to manually trigger the start of polling
   const initiatePolling = (statusUrl: string, providerName: string) => {
-    startPolling(statusUrl, providerName); // This sets isPolling to true and other info
-    // refetch(); // Optionally trigger an immediate fetch, though useQuery will fetch when enabled
+    useImageUploadStore
+      .getState()
+      .startPolling(imageId, statusUrl, providerName);
   };
 
   return {
     initiatePolling,
-    isPollingQueryLoading: isLoading, // Expose loading state of the query itself
+    isPollingQueryLoading: isLoading,
     pollingData: data,
     pollingQueryError: error,
+    image, // Return the current image state
   };
 };

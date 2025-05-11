@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { useEffect } from "react";
+import { useImageUploadStore, ImageItem } from "@/lib/store/imageUploadStore";
 
 // Dynamically import ReactCompareImage to ensure it's client-side only
 const DynamicReactCompareImage = dynamic(() => import("react-compare-image"), {
@@ -19,11 +20,13 @@ const DynamicReactCompareImage = dynamic(() => import("react-compare-image"), {
 interface ImageCompareResultProps {
   originalImageUrl: string | null;
   enhancedImageUrl: string | null;
+  imageId?: string; // Optional ID for the image being compared
 }
 
 export function ImageCompareResult({
   originalImageUrl,
   enhancedImageUrl,
+  imageId,
 }: ImageCompareResultProps) {
   useEffect(() => {
     if (typeof window !== "undefined" && typeof TouchEvent === "undefined") {
@@ -71,5 +74,30 @@ export function ImageCompareResult({
         </Button>
       </div>
     </div>
+  );
+}
+
+// Component that selects the image to compare from the store
+export function SelectedImageCompare() {
+  const store = useImageUploadStore();
+  const selectedId = store.selectedImageId;
+  const selectedImage = selectedId
+    ? store.images.find((img) => img.id === selectedId)
+    : null;
+
+  if (
+    !selectedImage ||
+    !selectedImage.previewUrl ||
+    !selectedImage.enhancedImageUrl
+  ) {
+    return null;
+  }
+
+  return (
+    <ImageCompareResult
+      originalImageUrl={selectedImage.previewUrl}
+      enhancedImageUrl={selectedImage.enhancedImageUrl}
+      imageId={selectedImage.id}
+    />
   );
 }

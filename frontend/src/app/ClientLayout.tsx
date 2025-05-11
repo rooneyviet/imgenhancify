@@ -7,6 +7,7 @@ import { useAuthStore } from "@/lib/store/authStore";
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { Toaster } from "sonner";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 export default function ClientLayout({
   children,
@@ -24,9 +25,9 @@ export default function ClientLayout({
   };
 
   // Get the first 4 and last 4 characters of the code to display
-  const displayCode = userAuthCode
-    ? `${userAuthCode.substring(0, 4)}...${userAuthCode.substring(userAuthCode.length - 4)}`
-    : "";
+  // const displayCode = userAuthCode
+  //   ? `${userAuthCode.substring(0, 4)}...${userAuthCode.substring(userAuthCode.length - 4)}`
+  //   : "";
 
   return (
     <QueryClientProvider client={queryClient}>
@@ -37,9 +38,10 @@ export default function ClientLayout({
               ImgEnhancify
             </Link>
             <div className="space-x-4 flex items-center">
+              <ThemeToggle />
               {isAuthenticated ? (
                 <>
-                  <span className="text-sm">Hello, {displayCode}!</span>
+                  <span className="text-sm">Hello, {userAuthCode}</span>
                   <Button variant="secondary" onClick={handleLogout}>
                     Logout
                   </Button>

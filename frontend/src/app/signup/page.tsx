@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
@@ -14,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
-import { createUser } from "../actions/auth";
+import { signUp } from "../actions/auth";
 
 export default function SignupPage() {
   const [authCode, setAuthCode] = useState<string | null>(null);
@@ -26,11 +25,11 @@ export default function SignupPage() {
     setError(null);
 
     try {
-      const newCode = uuidv4().substring(0, 16);
-      const result = await createUser(newCode);
+      // The signUp action now generates the code and saves it.
+      const result = await signUp();
 
-      if (result.success) {
-        setAuthCode(newCode);
+      if (result.authCode) {
+        setAuthCode(result.authCode);
       } else {
         setError(result.error || "Failed to create account. Please try again.");
       }

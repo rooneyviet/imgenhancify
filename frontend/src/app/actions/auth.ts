@@ -1,67 +1,60 @@
 "use server";
 
-import { prisma } from "@/lib/prisma";
+import { v4 as uuidv4 } from "uuid";
+import prisma from "@/lib/prisma";
 
-/**
- * Creates a new user with the provided auth code
- * @param authCode The unique authentication code
- * @returns Object with success status and error message if any
- */
-export async function createUser(authCode: string) {
+export async function signUp(): Promise<{ authCode?: string; error?: string }> {
   try {
-    // Check if auth code already exists
-    const existingUser = await prisma.user.findUnique({
-      where: { authCode },
-    });
-
-    if (existingUser) {
-      return {
-        success: false,
-        error: "Auth code already exists. Please generate a new one.",
-      };
-    }
-
-    // Create new user with auth code
+    const authCode = uuidv4();
     await prisma.user.create({
       data: {
-        authCode,
+        authCode: authCode,
       },
     });
-
-    return { success: true };
+    return { authCode };
   } catch (error) {
-    console.error("Error creating user:", error);
+    console.error("Error during sign up:", error);
+    if (error instanceof Error && "code" in error && error.code === "P2002") {
+      // Unique constraint failed, highly unlikely with UUIDs but good to handle
+      return {
+        error:
+          "Failed to generate a unique authentication code. Please try again.",
+      };
+    }
     return {
-      success: false,
-      error: "Failed to create user. Please try again.",
+      error:
+        "An unexpected error occurred during sign up. Please try again later.",
     };
   }
 }
 
-/**
- * Verifies if an auth code exists in the database
- * @param authCode The authentication code to verify
- * @returns Object with success status and error message if any
- */
-export async function verifyAuthCode(authCode: string) {
+export async function logIn(
+  authCode: string
+): Promise<{ success?: boolean; error?: string; userId?: number }> {
+  if (!authCode || typeof authCode !== "string" || authCode.trim() === "") {
+    return { error: "Authentication code cannot be empty." };
+  }
+
   try {
     const user = await prisma.user.findUnique({
-      where: { authCode },
+      where: {
+        authCode: authCode.trim(),
+      },
     });
 
-    if (!user) {
+    if (user) {
+      return { success: true, userId: user.id };
+    } else {
       return {
-        success: false,
-        error: "Invalid authentication code.",
+        error:
+          "Invalid authentication code. Please check the code and try again.",
       };
     }
-
-    return { success: true };
   } catch (error) {
-    console.error("Error verifying auth code:", error);
+    console.error("Error during login:", error);
     return {
-      success: false,
-      error: "Failed to verify authentication code. Please try again.",
+      error:
+        "An unexpected error occurred during login. Please try again later.",
     };
   }
 }

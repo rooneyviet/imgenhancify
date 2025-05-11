@@ -3,9 +3,10 @@ import { persist } from "zustand/middleware";
 
 interface AuthState {
   userAuthCode: string | null;
+  userId: number | null;
   isAuthenticated: boolean;
   error: string | null;
-  login: (code: string) => void;
+  login: (code: string, userId: number) => void;
   logout: () => void;
   setError: (errorMessage: string | null) => void;
 }
@@ -15,23 +16,33 @@ export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
       userAuthCode: null,
+      userId: null,
       isAuthenticated: false,
       error: null,
-      login: (code) => {
-        if (code.trim() !== "") {
-          // The actual verification is done in the login page using server action
-          // Here we just update the state based on the result
-          set({ userAuthCode: code, isAuthenticated: true, error: null });
+      login: (code, userId) => {
+        if (code.trim() !== "" && userId) {
+          set({
+            userAuthCode: code,
+            userId: userId,
+            isAuthenticated: true,
+            error: null,
+          });
         } else {
           set({
-            error: "Invalid login code.",
+            error: "Invalid login details.",
             isAuthenticated: false,
             userAuthCode: null,
+            userId: null,
           });
         }
       },
       logout: () =>
-        set({ userAuthCode: null, isAuthenticated: false, error: null }),
+        set({
+          userAuthCode: null,
+          userId: null,
+          isAuthenticated: false,
+          error: null,
+        }),
       setError: (errorMessage) => set({ error: errorMessage }),
     }),
     {
@@ -39,7 +50,7 @@ export const useAuthStore = create<AuthState>()(
       partialize: (state) => ({
         userAuthCode: state.userAuthCode,
         isAuthenticated: state.isAuthenticated,
-      }), // only store these fields
+      }),
     }
   )
 );

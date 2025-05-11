@@ -15,7 +15,7 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import { useAuthStore } from "@/lib/store/authStore";
-import { verifyAuthCode } from "../actions/auth";
+import { logIn as serverLogIn } from "../actions/auth"; // Renamed to avoid conflict with store's login
 
 export default function LoginPage() {
   const [authCode, setAuthCode] = useState<string>("");
@@ -32,17 +32,11 @@ export default function LoginPage() {
     setAuthError(null);
 
     try {
-      // Verify the auth code against the database
-      const result = await verifyAuthCode(authCode);
+      const result = await serverLogIn(authCode.trim());
 
-      if (result.success) {
+      if (result.success && result.userId) {
         // If verification is successful, update the auth store
-        login(authCode);
-
-        if (useAuthStore.getState().isAuthenticated) {
-          alert(`Login successful with code: ${authCode}.`);
-          // Redirection can be added here, e.g., router.push('/')
-        }
+        login(authCode.trim(), result.userId); // Pass userId to the store's login
       } else {
         // If verification fails, set the error
         setAuthError(result.error || "Invalid authentication code.");
@@ -72,7 +66,8 @@ export default function LoginPage() {
             placeholder="Enter your login code"
             value={authCode}
             onChange={(e) => setAuthCode(e.target.value)}
-            maxLength={16}
+            // UUIDs are 36 characters, server action handles validation.
+            // maxLength={36}
           />
           {authError && (
             <Alert variant="destructive">

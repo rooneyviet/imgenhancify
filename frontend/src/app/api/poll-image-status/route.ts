@@ -5,15 +5,13 @@ import {
 } from "@/services/polling/PollingProvider";
 import { FalPollingProvider } from "@/services/polling/FalPollingProvider";
 
-// Một "factory" đơn giản để lấy provider
+// A simple "factory" to get the provider
 function getPollingProvider(providerNameLower: string): PollingProvider | null {
-  // Nhận param đã lowercase
-  switch (
-    providerNameLower // Sử dụng trực tiếp
-  ) {
+  // Receive the lowercased param
+  switch (providerNameLower) {
     case "fal.ai":
       return new FalPollingProvider();
-    // Thêm các case khác cho các provider trong tương lai
+    // Add other cases for future providers
     // case 'anotherprovider':
     //   return new AnotherPollingProvider();
     default:
@@ -24,15 +22,15 @@ function getPollingProvider(providerNameLower: string): PollingProvider | null {
 interface PollImageStatusRequestBody {
   providerName: string;
   statusUrl: string;
-  apiKeyName?: string; // Tên biến môi trường chứa API key
+  apiKeyName?: string; // Environment variable name containing the API key
 }
 
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as PollImageStatusRequestBody;
-    const { providerName, statusUrl, apiKeyName } = body; // apiKeyName thường là undefined từ client hiện tại
+    const { providerName, statusUrl, apiKeyName } = body;
 
-    // Log giá trị nhận được
+    // Log received values
     console.log(
       `[API /api/poll-image-status] Received: providerName="${providerName}", statusUrl="${statusUrl}", apiKeyName="${apiKeyName}"`
     );
@@ -52,7 +50,7 @@ export async function POST(request: NextRequest) {
       `[API /api/poll-image-status] Using lowerCaseProviderName: "${lowerCaseProviderName}"`
     );
 
-    const provider = getPollingProvider(lowerCaseProviderName); // Truyền providerName đã được lowercase
+    const provider = getPollingProvider(lowerCaseProviderName);
     if (!provider) {
       console.error(
         `[API /api/poll-image-status] Unsupported provider: "${providerName}" (resolved to "${lowerCaseProviderName}").`
@@ -83,7 +81,7 @@ export async function POST(request: NextRequest) {
         );
       }
     } else if (apiKeyName) {
-      // Dành cho các provider khác yêu cầu apiKeyName cụ thể
+      // For other providers that require a specific apiKeyName
       apiKey = process.env[apiKeyName];
       console.log(
         `[API /api/poll-image-status] Provider is "${lowerCaseProviderName}". API key from env."${apiKeyName}": ${apiKey ? "found" : "NOT FOUND"}`
@@ -100,8 +98,8 @@ export async function POST(request: NextRequest) {
         );
       }
     } else {
-      // Trường hợp provider không phải 'fal.ai' và client không gửi 'apiKeyName'
-      // Điều này không nên xảy ra nếu client luôn gửi providerName là 'fal.ai' từ ImageEnhancementFactory
+      // Case where provider is not 'fal.ai' and client did not send 'apiKeyName'
+      // This should not happen if the client always sends 'fal.ai' as providerName from ImageEnhancementFactory
       console.error(
         `[API /api/poll-image-status] API key information is missing for provider "${providerName}". It's not "fal.ai" and no "apiKeyName" was provided in the request. This indicates a potential logic issue in how providerName is determined or passed.`
       );
@@ -113,7 +111,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Nếu đến đây, apiKey phải có giá trị
+    // If we reach here, apiKey must have a value
     console.log(
       `[API /api/poll-image-status] API key obtained successfully for provider "${providerName}".`
     );
@@ -129,7 +127,7 @@ export async function POST(request: NextRequest) {
       );
       const statusResponse = await provider.checkStatus(statusUrl, apiKey);
 
-      // Log chi tiết response từ provider.checkStatus
+      // Log detailed response from provider.checkStatus
       console.log(
         `[API /api/poll-image-status] Status response from provider (${lowerCaseProviderName}):`,
         JSON.stringify(statusResponse, null, 2)
@@ -146,10 +144,10 @@ export async function POST(request: NextRequest) {
           );
         }
         try {
-          // Truyền apiKey vào getResult
+          // Pass apiKey to getResult
           const imageResult: ImageResult = await provider.getResult(
             statusResponse.data,
-            apiKey // apiKey đã được lấy ở trên và phải có giá trị ở đây
+            apiKey
           );
           return NextResponse.json(imageResult, { status: 200 });
         } catch (error) {
@@ -179,21 +177,21 @@ export async function POST(request: NextRequest) {
         statusResponse.status === "IN_PROGRESS"
       ) {
         // Continue polling
-        elapsedTime += Date.now() - startTime; // Thời gian thực tế của request vừa rồi
-        const timeToWait = Math.max(0, interval - (Date.now() - startTime)); // Thời gian chờ còn lại cho đủ interval
+        elapsedTime += Date.now() - startTime;
+        const timeToWait = Math.max(0, interval - (Date.now() - startTime));
 
         if (elapsedTime + timeToWait >= maxDuration) {
           console.warn(
             `Polling timeout approaching for ${statusUrl}. Elapsed: ${elapsedTime}, Interval: ${interval}, Max: ${maxDuration}`
           );
-          // Không break ngay, để vòng lặp tự kiểm tra ở lần tiếp theo
+          // Don't break immediately, let the loop check on the next iteration
         }
 
         if (elapsedTime < maxDuration) {
           await new Promise((resolve) => setTimeout(resolve, timeToWait));
-          elapsedTime += timeToWait; // Cộng thêm thời gian đã chờ
+          elapsedTime += timeToWait;
         } else {
-          // Đã vượt quá thời gian ngay cả trước khi chờ
+          // Exceeded time even before waiting
           console.error(
             `Polling timed out for ${statusUrl} after ${elapsedTime}ms.`
           );
@@ -203,7 +201,7 @@ export async function POST(request: NextRequest) {
           );
         }
       } else {
-        // Trạng thái không xác định từ provider.checkStatus
+        // Unknown status from provider.checkStatus
         console.error(
           "Unknown status from provider.checkStatus:",
           statusResponse
@@ -215,13 +213,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Nếu vòng lặp kết thúc do timeout
+    // If the loop finishes due to timeout
     console.error(`Polling timed out for ${statusUrl} after ${elapsedTime}ms.`);
     return NextResponse.json({ error: "Polling timed out" }, { status: 408 });
   } catch (error) {
     console.error("Error in poll-image-status API route:", error);
     if (error instanceof SyntaxError) {
-      // Lỗi parse JSON
+      // JSON parsing error
       return NextResponse.json(
         { error: "Invalid JSON in request body" },
         { status: 400 }

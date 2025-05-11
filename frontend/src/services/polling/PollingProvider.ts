@@ -2,21 +2,21 @@ export type PollingStatus = "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED" | "FAILED";
 
 export interface PollingStatusResponse {
   status: PollingStatus;
-  data?: any; // Dữ liệu trả về từ provider, có thể là any hoặc một kiểu cụ thể hơn
-  error?: any; // Thông tin lỗi nếu có
+  data?: any; // Data returned from the provider, can be any or a more specific type
+  error?: any; // Error information if any
 }
 
 export interface ImageResult {
   imageUrl: string;
-  // Có thể thêm các trường khác nếu cần, ví dụ: metadata, thumbnailUrls, etc.
+  // Other fields can be added if needed, e.g., metadata, thumbnailUrls, etc.
 }
 
 export interface PollingProvider {
   /**
-   * Gửi request đến statusUrl để kiểm tra trạng thái của tác vụ.
-   * @param statusUrl URL để kiểm tra trạng thái.
-   * @param apiKey API key để xác thực với provider.
-   * @returns Promise chứa PollingStatusResponse.
+   * Sends a request to statusUrl to check the status of the task.
+   * @param statusUrl URL to check the status.
+   * @param apiKey API key to authenticate with the provider.
+   * @returns Promise containing PollingStatusResponse.
    */
   checkStatus(
     statusUrl: string,
@@ -24,22 +24,22 @@ export interface PollingProvider {
   ): Promise<PollingStatusResponse>;
 
   /**
-   * Trích xuất thông tin kết quả ảnh từ dữ liệu mà checkStatus trả về khi status là COMPLETED.
-   * @param responseData Dữ liệu trả về từ checkStatus khi hoàn thành.
-   * @param apiKey API key cần thiết để có thể fetch thêm dữ liệu nếu cần (ví dụ: gọi response_url của Fal.ai).
-   * @returns Promise chứa ImageResult.
+   * Extracts image result information from the data returned by checkStatus when status is COMPLETED.
+   * @param responseData Data returned from checkStatus upon completion.
+   * @param apiKey API key needed to fetch additional data if required (e.g., calling Fal.ai's response_url).
+   * @returns Promise containing ImageResult.
    */
   getResult(responseData: any, apiKey: string): Promise<ImageResult>;
 
   /**
-   * Trả về khoảng thời gian (ms) giữa các lần poll.
-   * @returns Khoảng thời gian polling.
+   * Returns the interval (ms) between polls.
+   * @returns Polling interval.
    */
   getPollingInterval(): number;
 
   /**
-   * Trả về thời gian polling tối đa (ms).
-   * @returns Thời gian polling tối đa.
+   * Returns the maximum polling duration (ms).
+   * @returns Maximum polling duration.
    */
   getMaxPollingDuration(): number;
 }

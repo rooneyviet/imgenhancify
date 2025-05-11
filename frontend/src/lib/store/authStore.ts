@@ -14,13 +14,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: false,
   error: null,
   login: (code) => {
-    // Trong thực tế, bạn sẽ xác thực mã này với backend
-    // Tạm thời, chỉ cần mã không trống là coi như thành công
     if (code.trim() !== "") {
       set({ userAuthCode: code, isAuthenticated: true, error: null });
     } else {
       set({
-        error: "Mã đăng nhập không hợp lệ.",
+        error: "Invalid login code.",
         isAuthenticated: false,
         userAuthCode: null,
       });

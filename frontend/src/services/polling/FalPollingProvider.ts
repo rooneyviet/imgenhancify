@@ -7,10 +7,10 @@ import {
 
 interface FalStatusResponse {
   status: "IN_QUEUE" | "IN_PROGRESS" | "COMPLETED";
-  // Fal.ai có thể trả về các trường khác tùy thuộc vào model và trạng thái
-  // Ví dụ: response_url, logs, error, etc.
-  response_url?: string; // Thường có khi status là IN_PROGRESS hoặc COMPLETED
-  [key: string]: any; // Cho phép các trường khác
+  // Fal.ai might return other fields depending on the model and status
+  // Example: response_url, logs, error, etc.
+  response_url?: string; // Usually present when status is IN_PROGRESS or COMPLETED
+  [key: string]: any; // Allow other fields
 }
 
 export class FalPollingProvider implements PollingProvider {
@@ -54,13 +54,13 @@ export class FalPollingProvider implements PollingProvider {
           pollingStatus = "COMPLETED";
           break;
         default:
-          // Nếu Fal.ai trả về một trạng thái không mong đợi
+          // If Fal.ai returns an unexpected status
           console.warn("Unknown status from Fal.ai:", falResponse.status);
-          // Coi như đang xử lý để tiếp tục poll, hoặc có thể coi là FAILED tùy logic
+          // Assume it's processing to continue polling, or could be considered FAILED depending on logic
           pollingStatus = "IN_PROGRESS";
       }
 
-      // Trả về toàn bộ falResponse trong data để getResult có thể sử dụng
+      // Return the entire falResponse in data so getResult can use it
       return { status: pollingStatus, data: falResponse };
     } catch (error) {
       console.error("Error checking Fal status:", error);
@@ -75,7 +75,7 @@ export class FalPollingProvider implements PollingProvider {
     responseData: any,
     apiKey: string
   ): Promise<ImageResult> {
-    // responseData ở đây là falResponse từ checkStatus (kết quả của việc gọi status_url)
+    // responseData here is falResponse from checkStatus (result of calling status_url)
     const falInitialStatusResponse = responseData as FalStatusResponse;
 
     if (
@@ -85,8 +85,8 @@ export class FalPollingProvider implements PollingProvider {
       throw new Error("Invalid initial status response data for getResult");
     }
 
-    // Theo phản hồi của bạn, khi status là COMPLETED, falInitialStatusResponse.response_url
-    // là URL cần được fetch để lấy URL ảnh thực sự.
+    // Based on your feedback, when status is COMPLETED, falInitialStatusResponse.response_url
+    // is the URL that needs to be fetched to get the actual image URL.
     if (
       falInitialStatusResponse.response_url &&
       typeof falInitialStatusResponse.response_url === "string"
@@ -97,7 +97,7 @@ export class FalPollingProvider implements PollingProvider {
       );
 
       if (!apiKey) {
-        // Điều này không nên xảy ra nếu API route truyền apiKey vào
+        // This should not happen if the API route passes the apiKey
         console.error(
           "[FalPollingProvider] API key is missing in getResult, cannot fetch final result URL."
         );
@@ -111,7 +111,7 @@ export class FalPollingProvider implements PollingProvider {
           method: "GET",
           headers: {
             Authorization: `Key ${apiKey}`,
-            Accept: "application/json", // Yêu cầu JSON response
+            Accept: "application/json", // Request JSON response
           },
         });
 
@@ -132,7 +132,7 @@ export class FalPollingProvider implements PollingProvider {
           JSON.stringify(finalResultData, null, 2)
         );
 
-        // Dựa trên ví dụ của bạn: {"image":{"url":"..."}}
+        // Based on your example: {"image":{"url":"..."}}
         if (
           finalResultData &&
           finalResultData.image &&
@@ -153,11 +153,11 @@ export class FalPollingProvider implements PollingProvider {
           `[FalPollingProvider] Exception while fetching or parsing final result from ${finalResultUrl}:`,
           error
         );
-        throw error; // Ném lại lỗi để API route xử lý
+        throw error; // Rethrow error for API route to handle
       }
     } else {
-      // Fallback hoặc lỗi nếu response_url không có khi COMPLETED
-      // Dựa trên logic cũ, nhưng điều này có thể không còn phù hợp.
+      // Fallback or error if response_url is missing when COMPLETED
+      // Based on old logic, but this might no longer be appropriate.
       console.warn(
         "[FalPollingProvider] COMPLETED status but no response_url found in initial status data. Attempting direct extraction (legacy).",
         falInitialStatusResponse
@@ -199,10 +199,10 @@ export class FalPollingProvider implements PollingProvider {
   }
 
   public getPollingInterval(): number {
-    return 3000; // 1 giây
+    return 3000; // 1 second
   }
 
   public getMaxPollingDuration(): number {
-    return 300000; // 5 phút
+    return 300000; // 5 minutes
   }
 }

@@ -11,7 +11,7 @@ const DynamicReactCompareImage = dynamic(() => import("react-compare-image"), {
   ssr: false,
   loading: () => (
     <div className="flex items-center justify-center w-full h-64 text-muted-foreground">
-      Đang tải trình so sánh...
+      Loading comparator...
     </div>
   ),
 });
@@ -47,13 +47,13 @@ export function ImageCompareResult({
 
   return (
     <div className="mt-6">
-      <h3 className="text-lg font-semibold mb-2 text-center">So Sánh Ảnh</h3>
+      <h3 className="text-lg font-semibold mb-2 text-center">Compare Images</h3>
       <div className="relative w-full max-w-2xl mx-auto border rounded-md">
         <DynamicReactCompareImage
           leftImage={originalImageUrl}
           rightImage={enhancedImageUrl}
-          leftImageLabel="Ảnh Gốc"
-          rightImageLabel="Ảnh Đã Xử Lý"
+          leftImageLabel="Original Image"
+          rightImageLabel="Processed Image"
           sliderLineWidth={2}
           handleSize={40}
         />
@@ -61,14 +61,14 @@ export function ImageCompareResult({
       <div className="text-center mt-4">
         <Button
           onClick={() => {
-            toast.info("Thông báo", {
+            toast.info("Notification", {
               description:
-                "Chức năng tải xuống ảnh đã xử lý sẽ sớm được cập nhật.",
+                "The download function for processed images will be updated soon.",
             });
           }}
           className="cursor-pointer"
         >
-          Tải Xuống Ảnh Đã Xử Lý
+          Download Processed Image
         </Button>
       </div>
     </div>

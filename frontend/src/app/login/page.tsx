@@ -22,21 +22,21 @@ export default function LoginPage() {
 
   const handleLogin = () => {
     if (!authCode.trim()) {
-      setAuthError("Mã không được để trống.");
+      setAuthError("Code cannot be empty.");
       return;
     }
     setAuthError(null);
-    console.log("Mã đăng nhập đã nhập:", authCode);
+    console.log("Entered login code:", authCode);
     login(authCode);
-    // Sau khi gọi login, authStore.isAuthenticated sẽ được cập nhật
-    // Chúng ta có thể chuyển hướng người dùng hoặc hiển thị thông báo thành công ở đây
-    // Ví dụ: if (useAuthStore.getState().isAuthenticated) router.push('/');
-    // Tạm thời chỉ log ra console và dựa vào alert từ store (nếu có) hoặc logic trong store
+    // After calling login, authStore.isAuthenticated will be updated
+    // We can redirect the user or display a success message here
+    // Example: if (useAuthStore.getState().isAuthenticated) router.push('/');
+    // For now, just log to console and rely on alert from store (if any) or logic in store
     if (useAuthStore.getState().isAuthenticated) {
-      alert(`Đăng nhập thành công với mã: ${authCode}.`);
-      // Có thể thêm chuyển hướng ở đây, ví dụ: router.push('/')
+      alert(`Login successful with code: ${authCode}.`);
+      // Redirection can be added here, e.g., router.push('/')
     } else {
-      // Lỗi đã được set trong store và sẽ hiển thị qua authError
+      // Error has been set in the store and will be displayed via authError
     }
   };
 
@@ -45,16 +45,16 @@ export default function LoginPage() {
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle className="text-2xl font-bold text-center">
-            Đăng nhập
+            Login
           </CardTitle>
           <CardDescription className="text-center">
-            Nhập mã đăng nhập 16 ký tự của bạn.
+            Enter your 16-character login code.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <Input
             type="text"
-            placeholder="Nhập mã đăng nhập của bạn"
+            placeholder="Enter your login code"
             value={authCode}
             onChange={(e) => setAuthCode(e.target.value)}
             maxLength={16}
@@ -62,22 +62,22 @@ export default function LoginPage() {
           {authError && (
             <Alert variant="destructive">
               <Terminal className="h-4 w-4" />
-              <AlertTitle>Lỗi</AlertTitle>
+              <AlertTitle>Error</AlertTitle>
               <AlertDescription>{authError}</AlertDescription>
             </Alert>
           )}
           <Button onClick={handleLogin} className="w-full">
-            Đăng nhập
+            Login
           </Button>
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">
           <p className="text-sm text-center text-gray-600 dark:text-gray-400">
-            Chưa có tài khoản?{" "}
+            Don't have an account?{" "}
             <Link
               href="/signup"
               className="font-medium text-blue-600 hover:underline dark:text-blue-400"
             >
-              Tạo tài khoản
+              Create account
             </Link>
           </p>
         </CardFooter>

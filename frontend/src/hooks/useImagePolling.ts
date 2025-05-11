@@ -38,15 +38,15 @@ async function pollImageStatus(
     };
     try {
       const parsedError = await response.json();
-      // API route của chúng ta trả về { error: "message" }
+      // Our API route returns { error: "message" }
       if (parsedError && typeof parsedError.error === "string") {
         errorData.message = parsedError.error;
       } else if (parsedError && typeof parsedError.message === "string") {
-        // Fallback nếu có message
+        // Fallback if there is a message
         errorData.message = parsedError.message;
       }
     } catch (e) {
-      // Nếu parse JSON thất bại, giữ lại lỗi fetch ban đầu
+      // If JSON parsing fails, keep the original fetch error
       console.error(
         "Failed to parse error response JSON from /api/poll-image-status:",
         e

@@ -8,17 +8,20 @@ const nextConfig: NextConfig = {
         protocol: "https",
         hostname: "queue.fal.run",
         port: "",
-        pathname: "/**", // Cho phép tất cả các path trên hostname này
-      },
-      {
-        protocol: "https",
-        hostname: "i.ibb.co", // Thêm cả i.ibb.co vì ảnh gốc upload lên đó
-        port: "",
+        // Allow all paths on this hostname
         pathname: "/**",
       },
       {
+        // Also add i.ibb.co because original images are uploaded there
         protocol: "https",
-        hostname: "v3.fal.media", // Hostname mới cho ảnh trực tiếp từ Fal.ai
+        hostname: "i.ibb.co",
+        port: "",
+        pathname: "/**",
+        // New hostname for images directly from Fal.ai
+      },
+      {
+        protocol: "https",
+        hostname: "v3.fal.media",
         port: "",
         pathname: "/**",
       },

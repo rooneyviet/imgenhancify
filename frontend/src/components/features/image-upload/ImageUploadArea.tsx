@@ -3,7 +3,7 @@
 import { useCallback } from "react";
 // Removed ReactCompareImage import, it's now in ImageCompareResult.tsx
 import { useDropzone, FileRejection, Accept } from "react-dropzone-esm";
-import { useImagePolling } from "@/hooks/useImagePolling"; // Import hook mới
+import { useImagePolling } from "@/hooks/useImagePolling"; // Import new hook
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import {
   Card,
@@ -17,7 +17,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import Image from "next/image";
 import { Loader2 } from "lucide-react";
-// import React from "react"; // No longer explicitly needed here
+// No longer explicitly needed here
 import { ImageCompareResult } from "./ImageCompareResult"; // Import the new component
 
 const acceptedFileTypes: Accept = {
@@ -31,7 +31,7 @@ export function ImageUploadArea() {
   const {
     selectedFile,
     previewUrl, // This is our originalImageUrl
-    error, // General error
+    error,
     isUploading,
     isEnhancing,
     isPolling, // state from store, will be driven by the hook
@@ -48,14 +48,16 @@ export function ImageUploadArea() {
     setFalRequestId,
     // setPollingInfo, // Managed by hook/store actions
     resetState,
-    pollingError, // Polling-specific error from store
+    pollingError,
   } = useImageUploadStore();
 
   const { initiatePolling } = useImagePolling();
 
   const handleEnhanceImage = async () => {
     if (!selectedFile) {
-      toast.error("Lỗi", { description: "Vui lòng chọn một ảnh để xử lý." });
+      toast.error("Error", {
+        description: "Please select an image to process.",
+      });
       return;
     }
 
@@ -81,19 +83,21 @@ export function ImageUploadArea() {
       if (!uploadResponse.ok) {
         const errorData = await uploadResponse.json().catch(() => ({}));
         throw new Error(
-          errorData.error || "Upload ảnh gốc thất bại. Vui lòng thử lại."
+          errorData.error || "Original image upload failed. Please try again."
         );
       }
 
       const uploadResult = await uploadResponse.json();
       if (!uploadResult.imageUrl) {
-        console.error("API response không có imageUrl:", uploadResult);
-        throw new Error("Không nhận được URL ảnh từ API upload.");
+        console.error("API response does not have imageUrl:", uploadResult);
+        throw new Error("Did not receive image URL from upload API.");
       }
       uploadedImageUrl = uploadResult.imageUrl;
       console.log("Uploaded image URL:", uploadedImageUrl);
 
-      toast.success("Thành công", { description: "Ảnh gốc đã được tải lên." });
+      toast.success("Success", {
+        description: "Original image has been uploaded.",
+      });
       setIsUploading(false);
       setIsEnhancing(true);
 
@@ -101,7 +105,7 @@ export function ImageUploadArea() {
       try {
         if (!uploadedImageUrl) {
           throw new Error(
-            "uploadedImageUrl không hợp lệ trước khi gọi enhance."
+            "uploadedImageUrl is invalid before calling enhance."
           );
         }
         const enhanceResponse = await fetch("/api/enhance-image", {
@@ -113,7 +117,7 @@ export function ImageUploadArea() {
         if (!enhanceResponse.ok) {
           const errorData = await enhanceResponse.json().catch(() => ({}));
           throw new Error(
-            errorData.error || "Xử lý ảnh thất bại. Vui lòng thử lại."
+            errorData.error || "Image processing failed. Please try again."
           );
         }
 
@@ -122,8 +126,8 @@ export function ImageUploadArea() {
 
         if (enhanceResult.enhancedUrl) {
           setEnhancedImageUrl(enhanceResult.enhancedUrl);
-          toast.success("Thành công", {
-            description: "Ảnh đã được xử lý thành công!",
+          toast.success("Success", {
+            description: "Image processed successfully!",
           });
           setIsEnhancing(false);
         } else if (enhanceResult.status_url && enhanceResult.provider_name) {
@@ -133,9 +137,9 @@ export function ImageUploadArea() {
             enhanceResult.provider_name
           );
           setIsEnhancing(false);
-          toast.info("Đang xử lý", {
+          toast.info("Processing", {
             description:
-              "Ảnh của bạn đã được gửi đi xử lý. Hệ thống sẽ tự động kiểm tra trạng thái.",
+              "Your image has been sent for processing. The system will automatically check the status.",
           });
         } else if (
           enhanceResult.request_id &&
@@ -145,31 +149,31 @@ export function ImageUploadArea() {
           setFalRequestId(enhanceResult.request_id);
           initiatePolling(enhanceResult.status_url, "fal");
           setIsEnhancing(false);
-          toast.info("Đang xử lý", {
+          toast.info("Processing", {
             description:
-              "Ảnh của bạn đang được gửi đi xử lý (Fal). Hệ thống sẽ tự động kiểm tra trạng thái.",
+              "Your image is being sent for processing (Fal). The system will automatically check the status.",
           });
         } else {
-          toast.warning("Thông báo", {
+          toast.warning("Notification", {
             description:
               enhanceResult.error ||
-              "Không nhận được thông tin cần thiết để theo dõi hoặc kết quả xử lý từ API.",
+              "Did not receive necessary information to track or processing result from API.",
           });
           setIsEnhancing(false);
         }
       } catch (enhanceError: any) {
-        console.error("Lỗi trong quá trình enhance ảnh:", enhanceError);
-        setError(enhanceError.message || "Lỗi khi xử lý ảnh.");
-        toast.error("Lỗi Enhance", {
-          description: enhanceError.message || "Lỗi khi xử lý ảnh.",
+        console.error("Error during image enhancement:", enhanceError);
+        setError(enhanceError.message || "Error processing image.");
+        toast.error("Enhance Error", {
+          description: enhanceError.message || "Error processing image.",
         });
         setIsEnhancing(false); // Ensure enhancing is false on error
       }
     } catch (e: any) {
-      console.error("Lỗi tổng thể trong quá trình xử lý ảnh:", e);
-      setError(e.message || "Đã có lỗi xảy ra.");
-      toast.error("Lỗi Tổng Thể", {
-        description: e.message || "Đã có lỗi xảy ra trong quá trình xử lý.",
+      console.error("Overall error during image processing:", e);
+      setError(e.message || "An error occurred.");
+      toast.error("Overall Error", {
+        description: e.message || "An error occurred during processing.",
       });
       setIsUploading(false);
       setIsEnhancing(false);
@@ -183,16 +187,16 @@ export function ImageUploadArea() {
 
       if (fileRejections.length > 0) {
         const firstRejection = fileRejections[0];
-        let message = "Có lỗi xảy ra khi tải file lên.";
+        let message = "An error occurred while uploading the file.";
         if (firstRejection.errors.some((e) => e.code === "too-many-files")) {
-          message = "Chỉ được phép tải lên một ảnh duy nhất.";
+          message = "Only a single image is allowed to be uploaded.";
         } else if (
           firstRejection.errors.some((e) => e.code === "file-invalid-type")
         ) {
-          message = "File không hợp lệ. Vui lòng chọn một file ảnh.";
+          message = "Invalid file. Please select an image file.";
         }
         setError(message); // Set general error
-        toast.error("Lỗi Upload", { description: message });
+        toast.error("Upload Error", { description: message });
         return;
       }
 
@@ -213,9 +217,9 @@ export function ImageUploadArea() {
   return (
     <Card className="w-full max-w-2xl mx-auto">
       <CardHeader>
-        <CardTitle>Tăng Cường Chất Lượng Ảnh</CardTitle>
+        <CardTitle>Enhance Image Quality</CardTitle>
         <CardDescription>
-          Tải ảnh của bạn lên để cải thiện chất lượng bằng AI.
+          Upload your image to improve its quality using AI.
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -237,14 +241,14 @@ export function ImageUploadArea() {
                 <div className="relative w-full h-64">
                   <Image
                     src={previewUrl}
-                    alt={`Xem trước ${selectedFile.name}`}
+                    alt={`Preview of ${selectedFile.name}`}
                     layout="fill"
                     objectFit="contain"
                     className="rounded-md"
                   />
                 </div>
               ) : isDragActive ? (
-                <p className="text-primary">Thả ảnh vào đây...</p>
+                <p className="text-primary">Drop the image here...</p>
               ) : (
                 <div className="text-center">
                   <svg
@@ -263,12 +267,12 @@ export function ImageUploadArea() {
                   </svg>
                   <p className="mb-2 text-sm text-muted-foreground">
                     <span className="font-semibold text-primary">
-                      Nhấp để tải lên
+                      Click to upload
                     </span>{" "}
-                    hoặc kéo thả
+                    or drag and drop
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Chỉ một ảnh (JPEG, PNG, WEBP, GIF)
+                    Single image only (JPEG, PNG, WEBP, GIF)
                   </p>
                 </div>
               )}
@@ -298,12 +302,12 @@ export function ImageUploadArea() {
             <Loader2 className="w-8 h-8 animate-spin text-primary mb-2" />
             <p className="text-sm text-muted-foreground">
               {isUploading
-                ? "Đang tải ảnh lên..."
+                ? "Uploading image..."
                 : isEnhancing
-                  ? "Đang gửi yêu cầu xử lý..."
+                  ? "Sending processing request..."
                   : isPolling
-                    ? "Đang kiểm tra kết quả xử lý..."
-                    : "Đang xử lý..."}
+                    ? "Checking processing result..."
+                    : "Processing..."}
             </p>
           </div>
         )}
@@ -326,24 +330,24 @@ export function ImageUploadArea() {
           !isEnhancing &&
           !isPolling && (
             <div className="mt-6 text-center">
-              <h3 className="text-lg font-semibold mb-2">Ảnh Đã Xử Lý:</h3>
+              <h3 className="text-lg font-semibold mb-2">Processed Image:</h3>
               <div className="relative w-full max-w-md mx-auto h-auto aspect-video border rounded-md overflow-hidden">
                 <Image
                   src={enhancedImageUrl}
-                  alt="Ảnh đã được xử lý"
+                  alt="Processed image"
                   layout="fill"
                   objectFit="contain"
                 />
               </div>
               <Button
                 onClick={() => {
-                  toast.info("Thông báo", {
-                    description: "Chức năng tải xuống sẽ sớm được cập nhật.",
+                  toast.info("Notification", {
+                    description: "Download function will be updated soon.",
                   });
                 }}
                 className="mt-4 cursor-pointer"
               >
-                Tải Xuống Ảnh
+                Download Image
               </Button>
             </div>
           )}
@@ -356,11 +360,11 @@ export function ImageUploadArea() {
           !(previewUrl && enhancedImageUrl) && ( // Hide if compare image is shown
             <div className="mt-6 text-center p-4 bg-yellow-50 border border-yellow-200 rounded-md">
               <h3 className="text-lg font-semibold text-yellow-700 mb-2">
-                Yêu Cầu Đã Được Gửi
+                Request Sent
               </h3>
               <p className="text-sm text-yellow-600">
-                Ảnh của bạn đã được gửi đi xử lý. Nếu trang được tải lại, bạn có
-                thể cần thực hiện lại.
+                Your image has been sent for processing. If the page is
+                reloaded, you may need to do it again.
               </p>
               {falRequestId && (
                 <p className="text-xs text-yellow-500 mt-1">
@@ -368,7 +372,7 @@ export function ImageUploadArea() {
                 </p>
               )}
               <p className="text-sm text-yellow-600 mt-2">
-                Trạng thái: Đang chờ xử lý.
+                Status: Waiting for processing.
               </p>
               <Button
                 onClick={() => {
@@ -378,7 +382,7 @@ export function ImageUploadArea() {
                 variant="link"
                 className="mt-2"
               >
-                Thử kiểm tra lại
+                Try checking again
               </Button>
             </div>
           )}
@@ -444,8 +448,8 @@ export function ImageUploadArea() {
                     pollingStatusUrl ||
                     error ||
                     pollingError
-                      ? "Tải Lên Ảnh Khác"
-                      : "Chọn Ảnh Để Bắt Đầu"}
+                      ? "Upload Another Image"
+                      : "Select Image to Start"}
                   </Button>
                 ))}
           </>

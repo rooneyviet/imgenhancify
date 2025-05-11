@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { Button } from "@/components/ui/button";
 import Link from "next/link";
 import {
@@ -13,14 +12,58 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Terminal, Copy, Check } from "lucide-react";
+import { signUp } from "../actions/auth";
+
+// Helper function to format the auth code for display
+function formatAuthCodeForDisplay(code: string): string {
+  if (!code || code.length !== 16) return code; // Return as is if not 16 chars
+  const upperCode = code.toUpperCase();
+  return `${upperCode.substring(0, 4)} ${upperCode.substring(4, 8)} ${upperCode.substring(8, 12)} ${upperCode.substring(12, 16)}`;
+}
 
 export default function SignupPage() {
   const [authCode, setAuthCode] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  const generateAuthCode = () => {
-    const newCode = uuidv4().substring(0, 16);
-    setAuthCode(newCode);
+  // Derived state for displaying the formatted code
+  const displayedAuthCode = authCode
+    ? formatAuthCodeForDisplay(authCode)
+    : null;
+
+  const generateAuthCode = async () => {
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      // The signUp action now generates the code and saves it.
+      const result = await signUp();
+
+      if (result.authCode) {
+        setAuthCode(result.authCode);
+      } else {
+        setError(result.error || "Failed to create account. Please try again.");
+      }
+    } catch (err) {
+      console.error("Error generating auth code:", err);
+      setError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    if (displayedAuthCode) {
+      try {
+        await navigator.clipboard.writeText(displayedAuthCode);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+      } catch (err) {
+        console.error("Failed to copy:", err);
+      }
+    }
   };
 
   return (
@@ -35,24 +78,52 @@ export default function SignupPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {error && (
+            <Alert variant="destructive">
+              <Terminal className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           {!authCode ? (
-            <Button onClick={generateAuthCode} className="w-full">
-              Generate Login Code
+            <Button
+              onClick={generateAuthCode}
+              className="w-full"
+              disabled={isLoading}
+            >
+              {isLoading ? "Creating Account..." : "Generate Login Code"}
             </Button>
           ) : (
             <div className="space-y-4">
               <Alert>
                 <Terminal className="h-4 w-4" />
-                <AlertTitle>Your Login Code:</AlertTitle>
-                <AlertDescription className="font-mono text-lg break-all">
-                  {authCode}
+                <div className="flex items-center justify-between">
+                  <AlertTitle>Your Login Code:</AlertTitle>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-6 w-6 p-0"
+                    onClick={copyToClipboard}
+                    aria-label="Copy code to clipboard"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <AlertDescription className="font-mono text-lg break-all mt-1">
+                  {displayedAuthCode}
                 </AlertDescription>
               </Alert>
               <Alert variant="destructive">
                 <Terminal className="h-4 w-4" />
-                <AlertTitle>Important!</AlertTitle>
+                <AlertTitle className="font-bold">Important!</AlertTitle>
                 <AlertDescription>
-                  Please save this code carefully. You will need it to log in.
+                  Please save this code somewhere safe. You will need it to log
+                  in.
                 </AlertDescription>
               </Alert>
             </div>

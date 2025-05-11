@@ -14,6 +14,8 @@ FROM base AS builder
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm ci
 COPY . .
+# Generate Prisma Client before building
+RUN npx prisma generate
 # Set NODE_ENV to production for the build
 ENV NODE_ENV=production
 RUN npm run build

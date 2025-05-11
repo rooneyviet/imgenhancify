@@ -25,5 +25,33 @@ services:
       WATCHPACK_POLLING: true
       # Disable telemetry for Next.js
       NEXT_TELEMETRY_DISABLED: 1
+      # PostgreSQL connection environment variables
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/imgenhancify
     # Override CMD in Dockerfile to run in development mode with hot-reloading
     command: npm run dev
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: imgenhancify-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: imgenhancify
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: imgenhancify-postgres-data

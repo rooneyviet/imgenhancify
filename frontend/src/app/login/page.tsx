@@ -4,6 +4,8 @@ import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import {
   Card,
   CardContent,
@@ -15,28 +17,46 @@ import {
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Terminal } from "lucide-react";
 import { useAuthStore } from "@/lib/store/authStore";
+import { logIn as serverLogIn } from "../actions/auth"; // Renamed to avoid conflict with store's login
 
 export default function LoginPage() {
   const [authCode, setAuthCode] = useState<string>("");
+  const [isLoading, setIsLoading] = useState(false);
   const { login, error: authError, setError: setAuthError } = useAuthStore();
+  const router = useRouter();
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     if (!authCode.trim()) {
       setAuthError("Code cannot be empty.");
       return;
     }
+
+    setIsLoading(true);
     setAuthError(null);
-    console.log("Entered login code:", authCode);
-    login(authCode);
-    // After calling login, authStore.isAuthenticated will be updated
-    // We can redirect the user or display a success message here
-    // Example: if (useAuthStore.getState().isAuthenticated) router.push('/');
-    // For now, just log to console and rely on alert from store (if any) or logic in store
-    if (useAuthStore.getState().isAuthenticated) {
-      alert(`Login successful with code: ${authCode}.`);
-      // Redirection can be added here, e.g., router.push('/')
-    } else {
-      // Error has been set in the store and will be displayed via authError
+
+    try {
+      const result = await serverLogIn(authCode.trim());
+
+      if (result.success && result.userId) {
+        // If verification is successful, update the auth store
+        login(authCode.trim(), result.userId); // Pass userId to the store's login
+
+        // Show success toast and redirect to main page
+        toast.success("Login successful", {
+          description: "Welcome back to IMG Enhancify!",
+        });
+
+        // Redirect to main page
+        router.push("/");
+      } else {
+        // If verification fails, set the error
+        setAuthError(result.error || "Invalid authentication code.");
+      }
+    } catch (err) {
+      console.error("Error during login:", err);
+      setAuthError("An unexpected error occurred. Please try again.");
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -54,10 +74,11 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
           <Input
             type="text"
-            placeholder="Enter your login code"
+            placeholder="XXXX XXXX XXXX XXXX"
             value={authCode}
             onChange={(e) => setAuthCode(e.target.value)}
-            maxLength={16}
+            maxLength={19} // 16 characters + 3 spaces
+            className="font-mono"
           />
           {authError && (
             <Alert variant="destructive">
@@ -66,8 +87,8 @@ export default function LoginPage() {
               <AlertDescription>{authError}</AlertDescription>
             </Alert>
           )}
-          <Button onClick={handleLogin} className="w-full">
-            Login
+          <Button onClick={handleLogin} className="w-full" disabled={isLoading}>
+            {isLoading ? "Verifying..." : "Login"}
           </Button>
         </CardContent>
         <CardFooter className="flex flex-col space-y-2">

@@ -1,7 +1,6 @@
 "use client";
 
 import { ImageUploadArea } from "@/components/features/image-upload/ImageUploadArea";
-import { Toaster } from "sonner"; // Ensure Toaster is imported
 
 export default function Home() {
   return (
@@ -17,7 +16,6 @@ export default function Home() {
       <main className="w-full max-w-2xl flex flex-col items-center gap-6">
         <ImageUploadArea />
       </main>
-      <Toaster richColors position="top-right" />
     </div>
   );
 }

@@ -38,7 +38,7 @@ export default function ClientLayout({
         <header className="bg-primary text-primary-foreground p-4 shadow-md">
           <nav className="container mx-auto flex justify-between items-center">
             <Link href="/" className="text-xl font-bold">
-              Imgenhancify
+              ImgEnhancify
             </Link>
             <div className="space-x-4 flex items-center">
               {isAuthenticated ? (

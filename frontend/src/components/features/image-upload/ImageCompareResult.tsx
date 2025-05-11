@@ -60,19 +60,6 @@ export function ImageCompareResult({
           handleSize={40}
         />
       </div>
-      <div className="text-center mt-4">
-        <Button
-          onClick={() => {
-            toast.info("Notification", {
-              description:
-                "The download function for processed images will be updated soon.",
-            });
-          }}
-          className="cursor-pointer"
-        >
-          Download Processed Image
-        </Button>
-      </div>
     </div>
   );
 }

@@ -50,10 +50,7 @@ export function ImageCompareResult({
   return (
     <div className="mt-6">
       <h3 className="text-lg font-semibold mb-2 text-center">Compare Images</h3>
-      <div
-        className="relative w-full max-w-2xl mx-auto border rounded-md overflow-hidden"
-        style={{ maxHeight: "500px" }}
-      >
+      <div className="w-full max-w-2xl mx-auto border rounded-md overflow-hidden">
         <DynamicReactCompareImage
           leftImage={originalImageUrl}
           rightImage={enhancedImageUrl}

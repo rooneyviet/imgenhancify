@@ -12,13 +12,14 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Terminal } from "lucide-react";
+import { Terminal, Copy, Check } from "lucide-react";
 import { signUp } from "../actions/auth";
 
 export default function SignupPage() {
   const [authCode, setAuthCode] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   const generateAuthCode = async () => {
     setIsLoading(true);
@@ -38,6 +39,18 @@ export default function SignupPage() {
       setError("An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const copyToClipboard = async () => {
+    if (authCode) {
+      try {
+        await navigator.clipboard.writeText(authCode);
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000); // Reset after 2 seconds
+      } catch (err) {
+        console.error("Failed to copy:", err);
+      }
     }
   };
 
@@ -73,17 +86,32 @@ export default function SignupPage() {
             <div className="space-y-4">
               <Alert>
                 <Terminal className="h-4 w-4" />
-                <AlertTitle>Your Login Code:</AlertTitle>
-                <AlertDescription className="font-mono text-lg break-all">
+                <div className="flex items-center justify-between">
+                  <AlertTitle>Your Login Code:</AlertTitle>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="h-6 w-6 p-0"
+                    onClick={copyToClipboard}
+                    aria-label="Copy code to clipboard"
+                  >
+                    {copied ? (
+                      <Check className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                  </Button>
+                </div>
+                <AlertDescription className="font-mono text-lg break-all mt-1">
                   {authCode}
                 </AlertDescription>
               </Alert>
               <Alert variant="destructive">
                 <Terminal className="h-4 w-4" />
-                <AlertTitle>Important!</AlertTitle>
+                <AlertTitle className="font-bold">Important!</AlertTitle>
                 <AlertDescription>
-                  Please save this code carefully. You will need it to log in.
-                  This code is now stored in the database.
+                  Please save this code somewhere safe. You will need it to log
+                  in.
                 </AlertDescription>
               </Alert>
             </div>

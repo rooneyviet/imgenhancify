@@ -1,11 +1,23 @@
 "use server";
 
-import { v4 as uuidv4 } from "uuid";
 import prisma from "@/lib/prisma";
+
+/**
+ * Generates a random 16-character alphanumeric string (a-z, 0-9)
+ * to be used as an authentication code
+ */
+function generateAuthCode(): string {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  let result = "";
+  for (let i = 0; i < 16; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 export async function signUp(): Promise<{ authCode?: string; error?: string }> {
   try {
-    const authCode = uuidv4();
+    const authCode = generateAuthCode();
     await prisma.user.create({
       data: {
         authCode: authCode,

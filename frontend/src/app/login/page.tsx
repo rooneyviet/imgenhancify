@@ -66,8 +66,7 @@ export default function LoginPage() {
             placeholder="Enter your login code"
             value={authCode}
             onChange={(e) => setAuthCode(e.target.value)}
-            // UUIDs are 36 characters, server action handles validation.
-            // maxLength={36}
+            maxLength={16}
           />
           {authError && (
             <Alert variant="destructive">

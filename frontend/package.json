@@ -6,7 +6,10 @@
     "dev": "npx prisma generate && next dev --turbopack",
     "build": "npx prisma generate && next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:fetch-image": "tsx src/tests/testFetchImageAsBase64.ts",
+    "test:fetch-image-interactive": "tsx src/tests/interactiveFetchImageTest.ts",
+    "test:save-image": "tsx src/tests/saveImageTest.ts"
   },
   "dependencies": {
     "@fal-ai/client": "^1.4.0",

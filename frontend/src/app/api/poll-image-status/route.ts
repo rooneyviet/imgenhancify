@@ -4,6 +4,7 @@ import {
   ImageResult,
 } from "@/services/polling/PollingProvider";
 import { FalPollingProvider } from "@/services/polling/FalPollingProvider";
+import { RunpodPollingProvider } from "@/services/polling/RunpodPollingProvider";
 
 // A simple "factory" to get the provider
 function getPollingProvider(providerNameLower: string): PollingProvider | null {
@@ -11,6 +12,8 @@ function getPollingProvider(providerNameLower: string): PollingProvider | null {
   switch (providerNameLower) {
     case "fal.ai":
       return new FalPollingProvider();
+    case "runpod":
+      return new RunpodPollingProvider();
     // Add other cases for future providers
     // case 'anotherprovider':
     //   return new AnotherPollingProvider();
@@ -77,6 +80,20 @@ export async function POST(request: NextRequest) {
         );
         return NextResponse.json(
           { error: "FAL_API_KEY is not configured for the server." },
+          { status: 500 }
+        );
+      }
+    } else if (lowerCaseProviderName === "runpod") {
+      apiKey = process.env.RUNPOD_API_KEY;
+      console.log(
+        `[API /api/poll-image-status] Provider is "runpod". RUNPOD_API_KEY from env: ${apiKey ? "found (" + apiKey.substring(0, 5) + "...)" : "NOT FOUND"}`
+      );
+      if (!apiKey) {
+        console.error(
+          '[API /api/poll-image-status] CRITICAL: RUNPOD_API_KEY is not configured or not accessible in environment variables for "runpod" provider.'
+        );
+        return NextResponse.json(
+          { error: "RUNPOD_API_KEY is not configured for the server." },
           { status: 500 }
         );
       }

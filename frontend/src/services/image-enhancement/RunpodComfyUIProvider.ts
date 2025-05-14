@@ -98,10 +98,16 @@ export class RunpodComfyUIProvider implements ImageEnhancementProvider {
       }
 
       // Return the response with the appropriate fields
+      // Construct the status_url using the apiEndpoint and the responseData.id
+      const status_url = `${this.apiEndpoint}/status/${responseData.id}`;
+
       return {
         requestId: responseData.id,
-        status: responseData.status || "IN_QUEUE",
-        providerRawResponse: responseData,
+        status: responseData.status || "IN_QUEUE", // Default to IN_QUEUE if status is not present
+        providerRawResponse: {
+          ...responseData,
+          status_url: status_url, // Add the constructed status_url
+        },
       };
     } catch (error) {
       console.error("RunpodComfyUIProvider: Error calling Runpod API:", error);

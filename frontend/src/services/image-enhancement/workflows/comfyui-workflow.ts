@@ -8,9 +8,9 @@ export const DEFAULT_COMFYUI_WORKFLOW = {
     workflow: {
       "1": {
         inputs: {
-          upscale_by: 4,
+          upscale_by: 2,
           seed: ["26", 3],
-          steps: 25,
+          steps: 30,
           cfg: 1,
           sampler_name: "euler",
           scheduler: "simple",
@@ -51,33 +51,9 @@ export const DEFAULT_COMFYUI_WORKFLOW = {
           title: "MANUAL PROMPT",
         },
       },
-      "5": {
-        inputs: {
-          rgthree_comparer: {
-            images: [
-              {
-                name: "A",
-                selected: true,
-                url: "/api/view?filename=rgthree.compare._temp_xriyp_00007_.png&type=temp&subfolder=&rand=0.29196687725123516",
-              },
-              {
-                name: "B",
-                selected: true,
-                url: "/api/view?filename=rgthree.compare._temp_xriyp_00008_.png&type=temp&subfolder=&rand=0.47878795421946563",
-              },
-            ],
-          },
-          image_a: ["1", 0],
-          image_b: ["55", 0],
-        },
-        class_type: "Image Comparer (rgthree)",
-        _meta: {
-          title: "Image Comparer (rgthree)",
-        },
-      },
       "7": {
         inputs: {
-          model_name: "4x-UltraSharp.pth",
+          model_name: "4x_foolhardy_Remacri.pth",
         },
         class_type: "UpscaleModelLoader",
         _meta: {

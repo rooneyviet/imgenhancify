@@ -61,6 +61,7 @@ export class RunpodPollingProvider implements PollingProvider {
           pollingStatus = "COMPLETED";
           break;
         case "FAILED":
+        case "CANCELLED":
           pollingStatus = "FAILED";
           break;
         default:

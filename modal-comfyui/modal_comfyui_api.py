@@ -129,9 +129,9 @@ def download_model(
 # Function to download all models during build
 def download_all_models_during_build():
     """Iterates through MODELS_TO_DOWNLOAD and calls download_model."""
-    token = os.environ.get("HUGGINGFACE_ACCESS_TOKEN")
+    token = os.environ.get("HF_TOKEN")
     if not token:
-        logger.warning("HUGGINGFACE_ACCESS_TOKEN secret not found. Downloads might fail for private models.")
+        logger.warning("HF_TOKEN secret not found. Downloads might fail for private models.")
     
     # Ensure the main cache directory exists before downloads start
     try:
@@ -172,6 +172,13 @@ image = image.add_local_dir(
     copy=True,
 )
 
+# Configure logging with more detailed format
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(pathname)s:%(lineno)d'
+)
+logger = logging.getLogger("comfyui-api")
+
 # Define the Modal App
 app = modal.App(name="comfyui-api", image=image)
 
@@ -182,13 +189,6 @@ app = modal.App(name="comfyui-api", image=image)
     volumes={CACHE_DIR: vol},
     enable_memory_snapshot=True,  # Snapshot container state for faster cold starts
 )
-# Configure logging with more detailed format
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(pathname)s:%(lineno)d'
-)
-logger = logging.getLogger("comfyui-api")
-
 @modal.concurrent(max_inputs=5)  # Run 5 inputs per container
 class ComfyUIAPI:
     port: int = 8000
@@ -417,34 +417,34 @@ class ComfyUIAPI:
                 "error": error_msg
             }
 
-    @modal.fastapi_endpoint(method="GET", path="/health")
-    async def health_check(self) -> Dict:
-        """API endpoint to check if the service is healthy."""
-        logger.info("Health check requested")
+    # @modal.fastapi_endpoint(method="GET")
+    # async def health_check(self) -> Dict:
+    #     """API endpoint to check if the service is healthy."""
+    #     logger.info("Health check requested")
         
-        try:
-            # Check ComfyUI server health
-            comfy_health = self.poll_server_health()
+    #     try:
+    #         # Check ComfyUI server health
+    #         comfy_health = self.poll_server_health()
             
-            # Return detailed health information
-            return {
-                "status": "healthy",
-                "message": "ComfyUI API is running",
-                "comfyui_server": comfy_health,
-                "timestamp": str(logging.Formatter().converter())
-            }
-        except Exception as e:
-            logger.error(f"Health check failed: {str(e)}")
-            logger.debug(f"Detailed error: {traceback.format_exc()}")
+    #         # Return detailed health information
+    #         return {
+    #             "status": "healthy",
+    #             "message": "ComfyUI API is running",
+    #             "comfyui_server": comfy_health,
+    #             "timestamp": str(logging.Formatter().converter())
+    #         }
+    #     except Exception as e:
+    #         logger.error(f"Health check failed: {str(e)}")
+    #         logger.debug(f"Detailed error: {traceback.format_exc()}")
             
-            # Still return a response, but indicate the service is unhealthy
-            return {
-                "status": "unhealthy",
-                "message": f"ComfyUI API is running but ComfyUI server is unhealthy: {str(e)}",
-                "timestamp": str(logging.Formatter().converter())
-            }
+    #         # Still return a response, but indicate the service is unhealthy
+    #         return {
+    #             "status": "unhealthy",
+    #             "message": f"ComfyUI API is running but ComfyUI server is unhealthy: {str(e)}",
+    #             "timestamp": str(logging.Formatter().converter())
+    #         }
 
-    @modal.fastapi_endpoint(method="POST", path="/submit_workflow")
+    @modal.fastapi_endpoint(method="POST")
     async def submit_workflow(self, request_data: Dict) -> Dict:
         """API endpoint to submit a workflow."""
         from fastapi import HTTPException
@@ -494,7 +494,7 @@ class ComfyUIAPI:
             logger.debug(f"Detailed error: {traceback.format_exc()}")
             raise HTTPException(status_code=500, detail=f"Internal server error: {str(e)}")
 
-    @modal.fastapi_endpoint(method="GET", path="/status/{call_id}")
+    @modal.fastapi_endpoint(method="GET")
     async def get_status(self, call_id: str) -> Dict:
         """API endpoint to get the status of a job."""
         from fastapi import HTTPException

@@ -408,58 +408,6 @@ Here's an example of polling for the status of a submitted workflow:
 curl -X GET "https://your-modal-app-url/status/your-call-id-here"
 ```
 
-Python example for submitting a workflow and polling for results:
-
-```python
-import requests
-import json
-import time
-import base64
-from PIL import Image
-import io
-
-# API endpoint
-API_URL = "https://your-modal-app-url"
-
-# Load workflow from file
-with open("workflow.json", "r") as f:
-    workflow_data = json.load(f)
-
-# Submit workflow
-response = requests.post(
-    f"{API_URL}/submit_workflow",
-    json={"workflow": workflow_data["workflow"]}
-)
-response_data = response.json()
-call_id = response_data["id"]
-print(f"Submitted workflow, call_id: {call_id}")
-
-# Poll for results
-while True:
-    status_response = requests.get(f"{API_URL}/status/{call_id}")
-    status_data = status_response.json()
-
-    if status_data["status"] == "RUNNING":
-        print("Still processing...")
-        time.sleep(5)  # Wait 5 seconds before polling again
-    elif status_data["status"] == "COMPLETED":
-        print("Processing completed!")
-        # Save the first image
-        if "output" in status_data and "images" in status_data["output"] and len(status_data["output"]["images"]) > 0:
-            image_data = status_data["output"]["images"][0]
-            image_bytes = base64.b64decode(image_data["data"])
-            image = Image.open(io.BytesIO(image_bytes))
-            image.save(image_data["filename"])
-            print(f"Saved image: {image_data['filename']}")
-        break
-    elif status_data["status"] == "FAILED":
-        print(f"Processing failed: {status_data.get('error', 'Unknown error')}")
-        break
-    else:
-        print(f"Unknown status: {status_data['status']}")
-        break
-```
-
 ## References
 
 - [Modal Documentation](https://modal.com/docs/guide)

@@ -7,7 +7,6 @@ A serverless API for ComfyUI workflows built on Modal.com. This API allows you t
 - [API Usage](#api-usage)
   - [Submit Workflow Endpoint](#submit-workflow-endpoint)
   - [Status Endpoint](#status-endpoint)
-  - [Health Check Endpoint](#health-check-endpoint)
 - [Deployment](#deployment)
   - [Prerequisites](#prerequisites)
   - [Deployment Steps](#deployment-steps)
@@ -71,8 +70,8 @@ This endpoint accepts a ComfyUI workflow in JSON format and starts processing it
 This endpoint allows you to check the status of a submitted workflow and retrieve results when processing is complete.
 
 - **Method**: `GET`
-- **URL Path**: `/status/{call_id}`
-- **Path Parameters**:
+- **URL Path**: `/status`
+- **Query Parameters**:
   - `call_id`: The unique ID returned by the submission endpoint
 - **Headers**:
   - `Authorization`: Modal handles authentication by default
@@ -128,32 +127,6 @@ This endpoint allows you to check the status of a submitted workflow and retriev
       "detail": "Internal server error: [error details]"
     }
     ```
-
-### Health Check Endpoint
-
-This endpoint allows you to check if the API service is healthy.
-
-- **Method**: `GET`
-- **URL Path**: `/health`
-- **Success Response (200 OK)**:
-  ```json
-  {
-    "status": "healthy",
-    "message": "ComfyUI API is running",
-    "comfyui_server": {
-      "status": "healthy"
-    },
-    "timestamp": "2025-05-15 20:00:00"
-  }
-  ```
-- **Error Response (200 OK but indicates unhealthy state)**:
-  ```json
-  {
-    "status": "unhealthy",
-    "message": "ComfyUI API is running but ComfyUI server is unhealthy: [error details]",
-    "timestamp": "2025-05-15 20:00:00"
-  }
-  ```
 
 ## Deployment
 
@@ -405,7 +378,7 @@ curl -X POST "https://your-modal-app-url/submit_workflow" \
 Here's an example of polling for the status of a submitted workflow:
 
 ```bash
-curl -X GET "https://your-modal-app-url/status/your-call-id-here"
+curl -X GET "https://your-modal-app-url/status?call_id=your-call-id-here"
 ```
 
 ## References

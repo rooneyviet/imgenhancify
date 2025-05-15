@@ -84,10 +84,10 @@ The following models must be pre-downloaded and placed in their respective Comfy
 
 ### 4.2. Poll Status/Result Endpoint
 - **Method**: `GET`
-- **Suggested URL Path**: `/status/{call_id}`
+- **Suggested URL Path**: `/status`
 - **Headers**:
     - `Authorization: Bearer <MODAL_TOKEN_OR_CUSTOM_TOKEN>`
-- **Path Parameters**:
+- **Query Parameters**:
     - `call_id`: The unique ID returned by the submission endpoint.
 - **Success Responses**:
     - **Job Running (202 Accepted)**:

@@ -182,10 +182,214 @@ logger = logging.getLogger("comfyui-api")
 # Define the Modal App
 app = modal.App(name="comfyui-api", image=image)
 
+# Define the standalone function for workflow execution
+@app.function(
+    gpu="L4",
+    volumes={CACHE_DIR: vol},
+    timeout=240,  # 30 minutes timeout for long workflows
+)
+def execute_comfy_workflow_async(workflow_json: Dict) -> Dict:
+    """Run a ComfyUI workflow and return the results.
+    
+    This is a standalone function that can be spawned asynchronously.
+    """
+    # Generate a unique ID for this run
+    run_id = str(uuid.uuid4())
+    workflow_path = f"/tmp/{run_id}.json"
+    logger.info(f"Starting workflow execution for run_id: {run_id}")
+    
+    try:
+        # Validate workflow JSON
+        if not isinstance(workflow_json, dict) or not workflow_json:
+            error_msg = "Invalid workflow format: must be a non-empty JSON object"
+            logger.error(f"Error for run_id {run_id}: {error_msg}")
+            return {
+                "status": "FAILED",
+                "error": error_msg
+            }
+        
+        # Launch ComfyUI server if not already running
+        try:
+            logger.info(f"Launching ComfyUI server for run_id {run_id}")
+            port = 8000
+            cmd = f"comfy launch --background -- --port {port}"
+            subprocess.run(cmd, shell=True, check=True)
+            logger.info(f"ComfyUI server launched successfully for run_id {run_id}")
+            
+            # Wait a moment for the server to start
+            import time
+            time.sleep(5)
+        except subprocess.SubprocessError as e:
+            error_msg = f"Failed to launch ComfyUI server: {str(e)}"
+            logger.error(f"Error for run_id {run_id}: {error_msg}")
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            return {
+                "status": "FAILED",
+                "error": error_msg
+            }
+        
+        # Check server health
+        try:
+            import urllib.request
+            import socket
+            
+            # Check if the server is up
+            req = urllib.request.Request(f"http://127.0.0.1:{port}/system_stats")
+            response = urllib.request.urlopen(req, timeout=5)
+            response_data = response.read().decode('utf-8')
+            logger.info(f"ComfyUI server is healthy for run_id {run_id}")
+            logger.debug(f"Health check response: {response_data}")
+        except (socket.timeout, urllib.error.URLError) as e:
+            error_msg = f"ComfyUI server is not healthy: {str(e)}"
+            logger.error(f"Server health check failed for run_id {run_id}: {str(e)}")
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            return {
+                "status": "FAILED",
+                "error": error_msg
+            }
+
+        # Save workflow to a temporary file
+        try:
+            with open(workflow_path, "w") as f:
+                json.dump(workflow_json, f)
+            logger.info(f"Saved workflow to {workflow_path} for run_id {run_id}")
+        except (IOError, OSError) as e:
+            error_msg = f"Failed to save workflow to temporary file: {str(e)}"
+            logger.error(f"Error for run_id {run_id}: {error_msg}")
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            return {
+                "status": "FAILED",
+                "error": error_msg
+            }
+
+        # Run the workflow
+        try:
+            cmd = f"comfy run --workflow {workflow_path} --wait --timeout 1200 --verbose"
+            logger.info(f"Executing command for run_id {run_id}: {cmd}")
+            process = subprocess.run(cmd, shell=True, check=True, capture_output=True, text=True)
+            logger.info(f"Workflow execution completed for run_id: {run_id}")
+            logger.debug(f"Command output: {process.stdout}")
+        except subprocess.CalledProcessError as e:
+            error_msg = f"ComfyUI workflow execution failed with exit code {e.returncode}"
+            logger.error(f"Error for run_id {run_id}: {error_msg}")
+            logger.debug(f"Command output: {e.stdout}")
+            logger.debug(f"Command error: {e.stderr}")
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            return {
+                "status": "FAILED",
+                "error": error_msg,
+                "details": {
+                    "stdout": e.stdout,
+                    "stderr": e.stderr,
+                    "exit_code": e.returncode
+                }
+            }
+        except Exception as e:
+            error_msg = f"Failed to execute ComfyUI workflow: {str(e)}"
+            logger.error(f"Error for run_id {run_id}: {error_msg}")
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            return {
+                "status": "FAILED",
+                "error": error_msg
+            }
+
+        # Get output images
+        output_dir = "/root/comfy/ComfyUI/output"
+        images = []
+
+        # Look for any SaveImage nodes in the workflow
+        try:
+            save_image_nodes = [
+                node for node_id, node in workflow_json.items()
+                if node.get("class_type") == "SaveImage"
+            ]
+
+            # If there are no SaveImage nodes, return an error
+            if not save_image_nodes:
+                error_msg = "No SaveImage nodes found in workflow"
+                logger.error(f"Error for run_id {run_id}: {error_msg}")
+                return {
+                    "status": "FAILED",
+                    "error": error_msg
+                }
+
+            # Process each SaveImage node
+            for node in save_image_nodes:
+                file_prefix = node.get("inputs", {}).get("filename_prefix", "")
+                logger.info(f"Looking for images with prefix: {file_prefix} for run_id {run_id}")
+                
+                # Check if output directory exists
+                if not Path(output_dir).exists():
+                    error_msg = f"Output directory {output_dir} does not exist"
+                    logger.error(f"Error for run_id {run_id}: {error_msg}")
+                    return {
+                        "status": "FAILED",
+                        "error": error_msg
+                    }
+                
+                # Find all files with this prefix
+                found_images = False
+                for f in Path(output_dir).iterdir():
+                    if f.name.startswith(file_prefix):
+                        found_images = True
+                        logger.info(f"Found output image: {f.name} for run_id {run_id}")
+                        try:
+                            # Read the file and encode it as base64
+                            image_data = base64.b64encode(f.read_bytes()).decode("utf-8")
+                            images.append({
+                                "filename": f.name,
+                                "type": "base64",
+                                "data": image_data
+                            })
+                        except (IOError, OSError) as e:
+                            logger.warning(f"Failed to read image file {f.name} for run_id {run_id}: {str(e)}")
+                            logger.debug(f"Detailed error: {traceback.format_exc()}")
+                            # Continue with other images
+                
+                if not found_images:
+                    logger.warning(f"No images found with prefix {file_prefix} for run_id {run_id}")
+        
+            # Check if we found any images
+            if not images:
+                error_msg = "No output images found after workflow execution"
+                logger.error(f"Error for run_id {run_id}: {error_msg}")
+                return {
+                    "status": "FAILED",
+                    "error": error_msg
+                }
+        except Exception as e:
+            error_msg = f"Error processing output images: {str(e)}"
+            logger.error(f"Error for run_id {run_id}: {error_msg}")
+            logger.debug(f"Detailed error: {traceback.format_exc()}")
+            return {
+                "status": "FAILED",
+                "error": error_msg
+            }
+
+        # Return the results
+        logger.info(f"Successfully completed workflow for run_id: {run_id} with {len(images)} images")
+        return {
+            "status": "COMPLETED",
+            "output": {
+                "images": images
+            }
+        }
+    except Exception as e:
+        # Log the error for any uncaught exceptions
+        error_msg = f"Unexpected error during workflow execution: {str(e)}"
+        logger.error(f"Error for run_id {run_id}: {error_msg}")
+        logger.debug(f"Detailed error: {traceback.format_exc()}")
+        
+        # Return error information
+        return {
+            "status": "FAILED",
+            "error": error_msg
+        }
+
 # Define a class to handle ComfyUI operations
 @app.cls(
     scaledown_window=5,  # 5 seconds container keep alive after it processes an input
-    gpu="L4",  # Use L4 GPU for inference
+    gpu="T4",  # Use L4 GPU for inference
     volumes={CACHE_DIR: vol},
     enable_memory_snapshot=True,  # Snapshot container state for faster cold starts
 )
@@ -474,9 +678,10 @@ class ComfyUIAPI:
             if not save_image_nodes:
                 logger.warning("No SaveImage nodes found in workflow. Output may be empty.")
             
-            # Spawn the workflow execution as a separate function call
+            # Get a reference to the standalone function and spawn it
             logger.info("Spawning asynchronous workflow execution")
-            call = self.run_workflow.spawn(workflow)
+            execute_comfy_workflow_async = modal.Function.from_name("comfyui-api", "execute_comfy_workflow_async")
+            call = execute_comfy_workflow_async.spawn(workflow)
             call_id = call.object_id
             logger.info(f"Generated call_id: {call_id} for new workflow submission")
             

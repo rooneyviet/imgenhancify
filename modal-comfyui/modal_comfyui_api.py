@@ -5,6 +5,15 @@ This module implements a serverless API for ComfyUI using Modal.com.
 It allows users to submit ComfyUI workflows dynamically and retrieve results via polling.
 """
 
+# GPU LIST:
+# T4 $0.59/ h
+# L4 $0.80/ h
+# A10G $1.10/ h
+# A100-40GB $2.10/ h
+# A100-80GB $2.50/ h
+# L40S $1.95/ h
+# H100 $3.95/ h
+
 import json
 import subprocess
 import uuid
@@ -40,6 +49,8 @@ image = (
     .run_commands("comfy node install --fast-deps comfyui-image-saver")
     .run_commands("comfy node install --fast-deps comfyui-tooling-nodes")
     .run_commands("comfy node install --fast-deps comfyui-supir")
+    .run_commands("comfy node install --fast-deps comfyui-easy-use")
+    .run_commands("comfy node install --fast-deps comfyui-florence2")
 )
 
 # Install UltimateSDUpscale via git clone
@@ -59,9 +70,9 @@ MODELS_TO_DOWNLOAD: List[Tuple[str, str, str]] = [
     ("black-forest-labs/FLUX.1-dev", "ae.safetensors", "vae"),
     
     # Upscale models
-    ("datasets/Kizi-Art/Upscale", "4x-UltraSharp.pth", "upscale_models"),
+    ("Kizi-Art/Upscale", "4x-UltraSharp.pth", "upscale_models"),
     ("FacehugmanIII/4x_foolhardy_Remacri", "4x_foolhardy_Remacri.pth", "upscale_models"),
-    
+    ("Akumetsu971/SD_Anime_Futuristic_Armor", "4x_NMKD-Siax_200k.pth", "upscale_models"),
     # UNET models
     ("black-forest-labs/FLUX.1-dev", "flux1-dev.safetensors", "unet"),
     
@@ -72,6 +83,7 @@ MODELS_TO_DOWNLOAD: List[Tuple[str, str, str]] = [
     # Checkpoints
     ("AiWise/Juggernaut-XL-V9-GE-RDPhoto2-Lightning_4S", "juggernautXL_v9Rdphoto2Lightning.safetensors", "checkpoints"),
     ("camenduru/SUPIR", "SUPIR-v0Q.ckpt", "checkpoints"),
+    
 ]
 
 # Helper function to download models
@@ -184,9 +196,9 @@ app = modal.App(name="comfyui-api", image=image)
 
 # Define the standalone function for workflow execution
 @app.function(
-    gpu="L4",
+    gpu="L4", 
     volumes={CACHE_DIR: vol},
-    timeout=240,  # 30 minutes timeout for long workflows
+    timeout=600,  # 30 minutes timeout for long workflows
 )
 def execute_comfy_workflow_async(workflow_json: Dict) -> Dict:
     """Run a ComfyUI workflow and return the results.
@@ -389,7 +401,7 @@ def execute_comfy_workflow_async(workflow_json: Dict) -> Dict:
 # Define a class to handle ComfyUI operations
 @app.cls(
     scaledown_window=5,  # 5 seconds container keep alive after it processes an input
-    gpu="T4",  # Use L4 GPU for inference
+    cpu=8.0,  
     volumes={CACHE_DIR: vol},
     enable_memory_snapshot=True,  # Snapshot container state for faster cold starts
 )

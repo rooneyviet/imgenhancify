@@ -4,15 +4,15 @@ import { useEffect, useState } from "react";
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import { useImagePolling } from "@/hooks/useImagePolling";
 
-interface PollingHandlerProps {
-  imageId: string;
-}
+// Single image polling component
+// This component is responsible for polling a single image
+// By creating a separate component for each image, we ensure that
+// hooks are called consistently for each component instance
+function SingleImagePoller({ imageId }: { imageId: string }) {
+  // Each component instance has its own stable hook calls
+  useImagePolling({ imageId });
 
-// Individual polling handler component
-function PollingHandler({ imageId }: PollingHandlerProps) {
-  const { initiatePolling } = useImagePolling({ imageId });
-
-  // This component doesn't render anything, it just sets up the polling
+  // This component doesn't render anything visible
   return null;
 }
 
@@ -32,10 +32,12 @@ export function ImagePollingManager() {
     setPollingImages(imagesToPoll);
   }, [store.images]);
 
+  // Render a separate component for each image that needs polling
+  // This follows React's pattern for rendering dynamic lists
   return (
     <>
       {pollingImages.map((imageId) => (
-        <PollingHandler key={imageId} imageId={imageId} />
+        <SingleImagePoller key={imageId} imageId={imageId} />
       ))}
     </>
   );

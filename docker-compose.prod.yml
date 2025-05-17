@@ -1,0 +1,25 @@
+version: "3.8"
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      # Use the 'runner' stage for the production build
+      target: runner
+    ports:
+      - "3000:3000"
+    # In production, we use the built image, so no development volumes are needed.
+    # The application code is copied into the image during the build process.
+    environment:
+      NODE_ENV: production
+      # DATABASE_URL should be provided by your production environment's secrets management.
+      # Example: DATABASE_URL: postgresql://user_prod:password_prod@external_postgres_host:5432/imgenhancify_prod
+      # For Docker Compose, you can still reference it as a variable that needs to be supplied.
+      DATABASE_URL: ${DATABASE_URL}
+      # NEXT_TELEMETRY_DISABLED is already set in the Dockerfile's builder stage,
+      # but can be set here too if needed for the runtime environment.
+      NEXT_TELEMETRY_DISABLED: 1
+    # The CMD from the Dockerfile's 'runner' stage will be used: CMD ["node", "server.js"]
+    # No 'command' override is needed here.
+    restart: unless-stopped

@@ -16,6 +16,88 @@ interface RunpodStatusResponse {
 }
 
 export class RunpodPollingProvider implements PollingProvider {
+  /**
+   * Cancels a Runpod job that is currently in the IN_QUEUE status
+   * @param statusUrl The status URL of the job to cancel
+   * @param apiKey The Runpod API key
+   * @returns Promise with success status and optional error message
+   */
+  public async cancelJob(
+    statusUrl: string,
+    apiKey: string
+  ): Promise<{ success: boolean; error?: string }> {
+    if (!apiKey) {
+      console.error("Runpod API key is missing for cancellation.");
+      return { success: false, error: "Runpod API key is missing." };
+    }
+
+    try {
+      // Extract endpoint_id and job_id from the statusUrl
+      // Example: https://api.runpod.ai/v2/abc-endpoint/status/xyz-job-id
+      const urlParts = statusUrl.split("/");
+      if (urlParts.length < 2) {
+        return { success: false, error: "Invalid status URL format." };
+      }
+
+      const jobId = urlParts[urlParts.length - 1]; // Last part is job_id
+      const endpointId = urlParts[urlParts.length - 3]; // Third from last is endpoint_id
+
+      if (!jobId || !endpointId) {
+        console.error(
+          `Failed to extract job ID or endpoint ID from URL: ${statusUrl}`
+        );
+        return {
+          success: false,
+          error: "Could not extract job ID or endpoint ID from status URL.",
+        };
+      }
+
+      // Construct the cancel URL
+      const cancelUrl = `https://api.runpod.ai/v2/${endpointId}/cancel/${jobId}`;
+      console.log(
+        `[RunpodPollingProvider] Attempting to cancel job at: ${cancelUrl}`
+      );
+
+      const response = await fetch(cancelUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response
+          .json()
+          .catch(() => ({ message: response.statusText }));
+        console.error(
+          `Runpod cancellation API error (${response.status}):`,
+          errorData
+        );
+        return {
+          success: false,
+          error:
+            typeof errorData.message === "string"
+              ? errorData.message
+              : `Failed to cancel job: ${response.status} ${response.statusText}`,
+        };
+      }
+
+      console.log(
+        `[RunpodPollingProvider] Successfully cancelled job: ${jobId}`
+      );
+      return { success: true };
+    } catch (error) {
+      console.error("Error cancelling Runpod job:", error);
+      return {
+        success: false,
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unknown error during cancellation",
+      };
+    }
+  }
   public async checkStatus(
     statusUrl: string,
     apiKey: string

@@ -1,0 +1,141 @@
+# Product Requirements Document: Modal ComfyUI Serverless API
+
+## 1. Objective
+Deploy a ComfyUI serverless API on Modal.com that allows users to submit ComfyUI workflows dynamically and retrieve results via a polling mechanism.
+
+## 2. Core Functionality
+
+### 2.1. Dynamic Workflow Submission
+- The API must accept a complete ComfyUI workflow in JSON format as part of the request body.
+- The API should not rely on pre-stored or fixed workflow JSON files on the server.
+
+### 2.2. Custom Node Installation
+The following custom nodes must be pre-installed in the ComfyUI environment:
+- **Via `comfy node install`**:
+    - `comfyui-custom-scripts`
+    - `comfyui-impact-pack`
+    - `rgthree-comfy`
+    - `was-node-suite-comfyui`
+    - `cg-use-everywhere`
+    - `comfyui-image-saver`
+    - `comfyui-tooling-nodes`
+    - `comfyui-supir`
+- **Via `git clone`**:
+    - `ComfyUI_UltimateSDUpscale`: Cloned from `https://github.com/ssitu/ComfyUI_UltimateSDUpscale --recursive` into the `ComfyUI/custom_nodes/` directory.
+
+### 2.3. Model Pre-loading
+The following models must be pre-downloaded and placed in their respective ComfyUI model directories. Access to Hugging Face models requiring authentication will be handled via a securely stored Hugging Face token (e.g., using an environment variable like `HUGGINGFACE_ACCESS_TOKEN` managed as a Modal Secret).
+
+- **`models/vae/`**:
+    - `ae.safetensors` (URL: `https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/ae.safetensors`)
+- **`models/upscale_models/`**:
+    - `4x-UltraSharp.pth` (URL: `https://huggingface.co/datasets/Kizi-Art/Upscale/resolve/fa98e357882a23b8e7928957a39462fbfaee1af5/4x-UltraSharp.pth`)
+    - `4x_foolhardy_Remacri.pth` (URL: `https://huggingface.co/FacehugmanIII/4x_foolhardy_Remacri/resolve/main/4x_foolhardy_Remacri.pth`)
+- **`models/unet/`**:
+    - `flux1-dev.safetensors` (URL: `https://huggingface.co/black-forest-labs/FLUX.1-dev/resolve/main/flux1-dev.safetensors`)
+- **`models/clip/`**:
+    - `t5xxl_fp8_e4m3fn.safetensors` (URL: `https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/t5xxl_fp8_e4m3fn.safetensors`)
+    - `clip_l.safetensors` (URL: `https://huggingface.co/comfyanonymous/flux_text_encoders/resolve/main/clip_l.safetensors`)
+- **`models/checkpoints/`**:
+    - `juggernautXL_v9Rdphoto2Lightning.safetensors` (URL: `https://huggingface.co/AiWise/Juggernaut-XL-V9-GE-RDPhoto2-Lightning_4S/resolve/main/juggernautXL_v9Rdphoto2Lightning.safetensors`)
+    - `SUPIR-v0Q.ckpt` (URL: `https://huggingface.co/camenduru/SUPIR/resolve/main/SUPIR-v0Q.ckpt`)
+
+### 2.4. Asynchronous Processing and Polling
+- **Initial Request**: When a workflow is submitted, the API should immediately return a unique `call_id` and a status of `RUNNING`.
+- **Polling Endpoint**: A separate API endpoint will allow clients to poll the status of a job using its `call_id`.
+- **Polling Responses**:
+    - If the job is still processing: `{ "id": "call-id", "status": "RUNNING" }`
+    - If the job is completed successfully: `{ "id": "call-id", "status": "COMPLETED", "output": { "images": [ { "filename": "ComfyUI_generated_image.png", "type": "base64", "data": "<base64_image_string>" } ] } }` (Note: `filename` can be dynamic based on ComfyUI output; `images` array can contain multiple images).
+    - If the job fails: `{ "id": "call-id", "status": "FAILED", "error": "<detailed_error_message>" }`
+
+## 3. Key Files
+- A new Python file (e.g., `modal_comfy_api.py`) will be created to house the Modal application logic.
+- The existing `modal-comfyui/comfyapp.py` is for reference purposes only and should not be directly modified for this project's core API logic.
+
+## 4. API Specification
+
+### 4.1. Submit Workflow Endpoint
+- **Method**: `POST`
+- **Suggested URL Path**: `/submit_workflow`
+- **Headers**:
+    - `Authorization: Bearer <MODAL_TOKEN_OR_CUSTOM_TOKEN>` (Modal handles auth, or custom if needed)
+    - `Content-Type: application/json`
+- **Request Body**:
+  ```json
+  {
+    "workflow": {
+      // Full ComfyUI workflow JSON
+    }
+  }
+  ```
+- **Success Response (202 Accepted)**:
+  ```json
+  {
+    "id": "generated-call-id-123",
+    "status": "RUNNING"
+  }
+  ```
+- **Error Response (e.g., 400 Bad Request, 500 Internal Server Error)**:
+  ```json
+  {
+    "error": "Description of the error (e.g., invalid workflow format, submission failed)"
+  }
+  ```
+
+### 4.2. Poll Status/Result Endpoint
+- **Method**: `GET`
+- **Suggested URL Path**: `/status`
+- **Headers**:
+    - `Authorization: Bearer <MODAL_TOKEN_OR_CUSTOM_TOKEN>`
+- **Query Parameters**:
+    - `call_id`: The unique ID returned by the submission endpoint.
+- **Success Responses**:
+    - **Job Running (202 Accepted)**:
+      ```json
+      {
+        "id": "generated-call-id-123",
+        "status": "RUNNING"
+      }
+      ```
+    - **Job Completed (200 OK)**:
+      ```json
+      {
+        "id": "generated-call-id-123",
+        "status": "COMPLETED",
+        "output": {
+          "images": [
+            {
+              "filename": "ComfyUI_00001_.png",
+              "type": "base64",
+              "data": "iVBORw0KGgoAAAANSUhEUg..."
+            }
+            // Potentially more images
+          ]
+        }
+      }
+      ```
+    - **Job Failed (200 OK or specific error code like 500 if failure is on Modal's end)**:
+      ```json
+      {
+        "id": "generated-call-id-123",
+        "status": "FAILED",
+        "error": "Detailed error message from the ComfyUI execution or system."
+      }
+      ```
+- **Error Response (e.g., 404 Not Found if `call_id` is invalid)**:
+  ```json
+  {
+    "error": "Call ID not found or invalid."
+  }
+  ```
+
+## 5. Technical Considerations
+- The application will be built using Python and Modal's SDK.
+- Hugging Face tokens for accessing private/gated models must be securely managed, likely via Modal Secrets and accessed through an environment variable (e.g., `HUGGINGFACE_ACCESS_TOKEN`).
+- Error handling should be robust, capturing issues from model downloads, node installations, ComfyUI execution, and API interactions.
+- Logging should be implemented for debugging and monitoring.
+
+## 6. References
+- Modal ComfyUI Example: `https://modal.com/docs/examples/comfyapp`
+- Modal Polling Solutions Guide: `https://modal.com/docs/guide/webhook-timeouts#polling-solutions`
+- Modal Document OCR Webapp (Polling Example): `https://modal.com/docs/examples/doc_ocr_webapp`

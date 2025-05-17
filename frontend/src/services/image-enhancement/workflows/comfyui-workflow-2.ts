@@ -1,0 +1,232 @@
+/**
+ * ComfyUI workflow 2 for image enhancement
+ * This workflow is used by the RunpodComfyUIProvider
+ */
+
+export const COMFYUI_WORKFLOW_2 = {
+  input: {
+    workflow: {
+      "10": {
+        inputs: {
+          vae_name: "ae.safetensors",
+        },
+        class_type: "VAELoader",
+        _meta: {
+          title: "Load VAE",
+        },
+      },
+      "11": {
+        inputs: {
+          clip_name1: "t5xxl_fp8_e4m3fn.safetensors",
+          clip_name2: "clip_l.safetensors",
+          type: "flux",
+          device: "default",
+        },
+        class_type: "DualCLIPLoader",
+        _meta: {
+          title: "DualCLIPLoader",
+        },
+      },
+      "12": {
+        inputs: {
+          unet_name: "flux1-dev.safetensors",
+          weight_dtype: "fp8_e4m3fn",
+        },
+        class_type: "UNETLoader",
+        _meta: {
+          title: "Load Diffusion Model",
+        },
+      },
+      "29": {
+        inputs: {
+          clip_l: ["92", 2],
+          t5xxl: "photorealistic picture",
+          guidance: 2.2,
+          clip: ["11", 0],
+        },
+        class_type: "CLIPTextEncodeFlux",
+        _meta: {
+          title: "CLIPTextEncodeFlux",
+        },
+      },
+      "74": {
+        inputs: {
+          model_name: "4x_NMKD-Siax_200k.pth",
+        },
+        class_type: "UpscaleModelLoader",
+        _meta: {
+          title: "Load Upscale Model",
+        },
+      },
+      "76": {
+        inputs: {
+          upscale_model: ["74", 0],
+          image: ["91", 0],
+        },
+        class_type: "ImageUpscaleWithModel",
+        _meta: {
+          title: "Upscale Image (using Model)",
+        },
+      },
+      "77": {
+        inputs: {
+          upscale_method: "lanczos",
+          scale_by: 0.5,
+          image: ["76", 0],
+        },
+        class_type: "ImageScaleBy",
+        _meta: {
+          title: "Upscale Image By",
+        },
+      },
+      "78": {
+        inputs: {
+          pixels: ["77", 0],
+          vae: ["10", 0],
+        },
+        class_type: "VAEEncode",
+        _meta: {
+          title: "VAE Encode",
+        },
+      },
+      "79": {
+        inputs: {
+          seed: 449806890795038,
+          steps: 20,
+          cfg: 1,
+          sampler_name: "dpmpp_2m",
+          scheduler: "karras",
+          denoise: 0.7000000000000001,
+          model: ["12", 0],
+          positive: ["29", 0],
+          negative: ["80", 0],
+          latent_image: ["78", 0],
+        },
+        class_type: "KSampler",
+        _meta: {
+          title: "KSampler",
+        },
+      },
+      "80": {
+        inputs: {
+          text: "",
+          clip: ["11", 0],
+        },
+        class_type: "CLIPTextEncode",
+        _meta: {
+          title: "CLIP Text Encode (Prompt)",
+        },
+      },
+      "81": {
+        inputs: {
+          samples: ["79", 0],
+          vae: ["10", 0],
+        },
+        class_type: "VAEDecode",
+        _meta: {
+          title: "VAE Decode",
+        },
+      },
+      "82": {
+        inputs: {
+          images: ["81", 0],
+        },
+        class_type: "PreviewImage",
+        _meta: {
+          title: "Preview Image",
+        },
+      },
+      "84": {
+        inputs: {
+          upscale_model: ["74", 0],
+          image: ["81", 0],
+        },
+        class_type: "ImageUpscaleWithModel",
+        _meta: {
+          title: "Upscale Image (using Model)",
+        },
+      },
+      "85": {
+        inputs: {
+          upscale_method: "lanczos",
+          scale_by: 1,
+          image: ["84", 0],
+        },
+        class_type: "ImageScaleBy",
+        _meta: {
+          title: "Upscale Image By",
+        },
+      },
+      "88": {
+        inputs: {
+          filename_prefix: "ComfyUI",
+          images: ["85", 0],
+        },
+        class_type: "SaveImage",
+        _meta: {
+          title: "Save Image",
+        },
+      },
+      "91": {
+        inputs: {
+          size: 717,
+          mode: true,
+          images: ["97", 0],
+        },
+        class_type: "easy imageScaleDownToSize",
+        _meta: {
+          title: "Image Scale Down To Size",
+        },
+      },
+      "92": {
+        inputs: {
+          text_input: "",
+          task: "detailed_caption",
+          fill_mask: true,
+          keep_model_loaded: false,
+          max_new_tokens: 1024,
+          num_beams: 3,
+          do_sample: true,
+          output_mask_select: "",
+          seed: 1120488618825055,
+          image: ["97", 0],
+          florence2_model: ["94", 0],
+        },
+        class_type: "Florence2Run",
+        _meta: {
+          title: "Florence2Run",
+        },
+      },
+      "94": {
+        inputs: {
+          model: "MiaoshouAI/Florence-2-base-PromptGen-v1.5",
+          precision: "fp16",
+          attention: "sdpa",
+        },
+        class_type: "DownloadAndLoadFlorence2Model",
+        _meta: {
+          title: "DownloadAndLoadFlorence2Model",
+        },
+      },
+      "96": {
+        inputs: {
+          text: "a close-up portrait of a leopard, positioned directly in the center of the frame, the leopard's face is facing the viewer, with its eyes looking directly at them, the camera is positioned close to the upper body of the camera, capturing the viewer's attention, the background is blurred, with hints of green foliage and soft lighting, creating a serene atmosphere, the cheetah's body is positioned in a way that creates a sense of balance and harmony, the overall effect is one of tranquility and natural beauty, inviting the viewer to step into the image",
+          anything: ["92", 2],
+        },
+        class_type: "easy showAnything",
+        _meta: {
+          title: "Show Any",
+        },
+      },
+      "97": {
+        inputs: {
+          image: "", // Will be replaced with base64 image
+        },
+        class_type: "ETN_LoadImageBase64",
+        _meta: {
+          title: "Load Image (Base64)",
+        },
+      },
+    },
+  },
+};

@@ -16,6 +16,7 @@ export interface ImageItem {
   pollingError: string | null;
   uploadedImageUrl: string | null; // URL of the uploaded image on the server
   error: string | null;
+  inQueueSince: number | null; // Timestamp when the image entered IN_QUEUE status
 }
 
 interface ImageUploadState {
@@ -85,6 +86,7 @@ export const useImageUploadStore = create<ImageUploadState>((set, get) => ({
         pollingError: null,
         uploadedImageUrl: null,
         error: null,
+        inQueueSince: null,
       };
     });
 

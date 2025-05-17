@@ -26,7 +26,7 @@ services:
       # Disable telemetry for Next.js
       NEXT_TELEMETRY_DISABLED: 1
       # PostgreSQL connection environment variables
-      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/imgenhancify
+      DATABASE_URL: ${DATABASE_URL}
     # Override CMD in Dockerfile to run in development mode with hot-reloading
     command: npm run dev
     depends_on:
@@ -40,9 +40,9 @@ services:
     ports:
       - "5432:5432"
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: imgenhancify
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
       PGDATA: /var/lib/postgresql/data/pgdata
     volumes:
       - postgres_data:/var/lib/postgresql/data

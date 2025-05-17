@@ -79,7 +79,6 @@ export async function POST(request: NextRequest) {
       provider_image_id: result.data.id, // ImgBB image ID
       message: "Image uploaded successfully to ImgBB.",
       imgbb_response: {
-        // For debugging or more detailed client-side info if needed
         display_url: displayUrl,
         thumb_url: thumbUrl,
         size: result.data.size,

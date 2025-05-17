@@ -85,7 +85,6 @@ export function ImageProcessor({ imageId }: ImageProcessorProps) {
           } else if (enhanceResult.status_url && enhanceResult.provider_name) {
             useImageUploadStore.getState().updateImage(imageId, {
               isEnhancing: false,
-              // falRequestId: enhanceResult.request_id || null, // Adjust if needed for specific providers
             });
             useImageUploadStore
               .getState()

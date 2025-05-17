@@ -2,6 +2,8 @@
 
 import { useEffect, useRef } from "react";
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
+import { uploadImage } from "@/services/apiService/ImageUploadService";
+import { requestEnhancement } from "@/services/apiService/ImageEnhancementService";
 
 interface ImageProcessorProps {
   imageId: string;
@@ -44,25 +46,9 @@ export function ImageProcessor({ imageId }: ImageProcessorProps) {
           console.log(
             `ImageProcessor (${imageId}): Step 1: Uploading image file: ${currentImageState.file.name}`
           );
-          const formData = new FormData();
-          formData.append("file", currentImageState.file);
 
-          const uploadResponse = await fetch("/api/upload-image", {
-            method: "POST",
-            body: formData,
-          });
+          const uploadResult = await uploadImage(currentImageState.file);
 
-          if (!uploadResponse.ok) {
-            const errorData = await uploadResponse.json().catch(() => ({}));
-            throw new Error(
-              errorData.error ||
-                "Original image upload failed. Please try again."
-            );
-          }
-          const uploadResult = await uploadResponse.json();
-          if (!uploadResult.imageUrl) {
-            throw new Error("Did not receive image URL from upload API.");
-          }
           console.log(
             `ImageProcessor (${imageId}): Step 1 complete. Uploaded to: ${uploadResult.imageUrl}. Updating store.`
           );
@@ -79,19 +65,9 @@ export function ImageProcessor({ imageId }: ImageProcessorProps) {
           console.log(
             `ImageProcessor (${imageId}): Step 2: Enhancing image using URL: ${uploadResult.imageUrl}`
           );
-          const enhanceResponse = await fetch("/api/enhance-image", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ image_url: uploadResult.imageUrl }),
-          });
 
-          if (!enhanceResponse.ok) {
-            const errorData = await enhanceResponse.json().catch(() => ({}));
-            throw new Error(
-              errorData.error || "Image processing failed. Please try again."
-            );
-          }
-          const enhanceResult = await enhanceResponse.json();
+          const enhanceResult = await requestEnhancement(uploadResult.imageUrl);
+
           console.log(
             `ImageProcessor (${imageId}): Step 2 complete. Result:`,
             enhanceResult

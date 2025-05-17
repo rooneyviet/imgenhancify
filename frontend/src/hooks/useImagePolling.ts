@@ -1,89 +1,15 @@
 import { useQuery, Query } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useImageUploadStore, ImageItem } from "@/lib/store/imageUploadStore";
-
-interface PollImageStatusPayload {
-  providerName: string;
-  statusUrl: string;
-  apiKeyName?: string;
-}
-
-interface PollImageStatusResponse {
-  imageUrl?: string;
-  message?: string; // For errors or other statuses
-  // Fal.ai specific fields that might come through the poll-image-status route
-  status?: string; // e.g., "IN_PROGRESS", "COMPLETED", "ERROR"
-  error?: any;
-  logs?: any[];
-  interim_images?: any[];
-}
+import {
+  fetchPollingStatus,
+  cancelJob,
+  PollImageStatusPayload,
+  PollImageStatusResponse,
+} from "@/services/apiService/PollingService";
 
 const POLLING_INTERVAL = 3000;
 const MAX_POLLING_ATTEMPTS = 20;
-
-async function pollImageStatus(
-  payload: PollImageStatusPayload
-): Promise<PollImageStatusResponse> {
-  const response = await fetch("/api/poll-image-status", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    let errorData: { error?: string; message?: string } = {
-      message: `Polling request failed with status: ${response.status}`,
-    };
-    try {
-      const parsedError = await response.json();
-      // Our API route returns { error: "message" }
-      if (parsedError && typeof parsedError.error === "string") {
-        errorData.message = parsedError.error;
-      } else if (parsedError && typeof parsedError.message === "string") {
-        // Fallback if there is a message
-        errorData.message = parsedError.message;
-      }
-    } catch (e) {
-      // If JSON parsing fails, keep the original fetch error
-      console.error(
-        "Failed to parse error response JSON from /api/poll-image-status:",
-        e
-      );
-    }
-    throw new Error(errorData.message);
-  }
-  return response.json();
-}
-
-async function cancelRunpodJobOnClient(
-  statusUrl: string
-): Promise<{ success: boolean; error?: string }> {
-  try {
-    const response = await fetch("/api/cancel-runpod-job", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ statusUrl }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.error || `Failed with status: ${response.status}`,
-      };
-    }
-    return { success: true };
-  } catch (e) {
-    console.error("Error calling /api/cancel-runpod-job:", e);
-    return {
-      success: false,
-      error: e instanceof Error ? e.message : "Unknown cancellation error",
-    };
-  }
-}
 
 interface UseImagePollingProps {
   imageId: string;
@@ -125,12 +51,57 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
         "Polling attempted without required URL or provider name."
       );
     }
-    return pollImageStatus({
+    return fetchPollingStatus({
       statusUrl: image.pollingStatusUrl,
       providerName: image.pollingProviderName,
       apiKeyName:
         image.pollingProviderName === "fal" ? "FAL_AI_KEY" : undefined,
     });
+  };
+
+  // Helper function to handle Runpod queue timeout
+  const handleRunpodQueueTimeout = async () => {
+    if (!image || !image.pollingStatusUrl) return;
+
+    const storeActions = useImageUploadStore.getState();
+    console.warn(
+      `[useImagePolling] Runpod job ${imageId} in queue for >60s. Attempting cancellation.`
+    );
+
+    if (!image.pollingStatusUrl) {
+      console.error(
+        "[useImagePolling] Cannot cancel job: pollingStatusUrl is missing for imageId:",
+        imageId
+      );
+      storeActions.updateImage(imageId, {
+        isPolling: false,
+        pollingError: "Cannot cancel job: status URL missing.",
+        inQueueSince: null,
+      });
+      setTimeout(() => storeActions.processNextImage(), 2000);
+      return;
+    }
+
+    const cancelResult = await cancelJob(
+      image.pollingStatusUrl,
+      image.pollingProviderName || "runpod"
+    );
+
+    if (cancelResult.success) {
+      storeActions.updateImage(imageId, {
+        isPolling: false,
+        pollingError: "Job cancelled: Exceeded 60 seconds in queue.",
+        inQueueSince: null,
+      });
+    } else {
+      storeActions.updateImage(imageId, {
+        isPolling: false,
+        pollingError: `Queue timeout (>60s). Cancellation failed: ${cancelResult.error || "Unknown reason"}`,
+        inQueueSince: null,
+      });
+    }
+
+    setTimeout(() => storeActions.processNextImage(), 2000);
   };
 
   const { data, error, isLoading, refetch } = useQuery<
@@ -155,23 +126,21 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
     ) => {
       const currentData = query.state.data;
       const storeActions = useImageUploadStore.getState();
-      // Use the 'image' state variable from the hook, which is synced with the store
 
+      // Stop polling if image is not available
       if (!image) {
-        // Check if the image object itself is available in the hook's state
         console.warn(
           `[useImagePolling] Image with ID ${imageId} not found in hook state during refetchInterval. Stopping polling.`
         );
         return false;
       }
 
-      if (currentData?.imageUrl) {
-        return false;
-      }
-      if (query.state.status === "error") {
+      // Stop polling if we have an image URL or there was an error
+      if (currentData?.imageUrl || query.state.status === "error") {
         return false;
       }
 
+      // Stop polling if status is COMPLETED or ERROR
       if (
         currentData?.status === "COMPLETED" ||
         currentData?.status === "ERROR"
@@ -179,7 +148,7 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
         return false;
       }
 
-      // Runpod IN_QUEUE timeout logic
+      // Handle Runpod IN_QUEUE status
       if (
         currentData?.status === "IN_QUEUE" &&
         image.pollingProviderName?.toLowerCase() === "runpod"
@@ -190,42 +159,7 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
           const timeSpentInQueue = Date.now() - image.inQueueSince;
           if (timeSpentInQueue > 60000) {
             // 60 seconds
-            console.warn(
-              `[useImagePolling] Runpod job ${imageId} in queue for >60s. Attempting cancellation.`
-            );
-            Promise.resolve().then(async () => {
-              if (!image.pollingStatusUrl) {
-                // Guard against missing URL
-                console.error(
-                  "[useImagePolling] Cannot cancel job: pollingStatusUrl is missing for imageId:",
-                  imageId
-                );
-                storeActions.updateImage(imageId, {
-                  isPolling: false,
-                  pollingError: "Cannot cancel job: status URL missing.",
-                  inQueueSince: null,
-                });
-                setTimeout(() => storeActions.processNextImage(), 2000);
-                return;
-              }
-              const cancelResult = await cancelRunpodJobOnClient(
-                image.pollingStatusUrl
-              );
-              if (cancelResult.success) {
-                storeActions.updateImage(imageId, {
-                  isPolling: false,
-                  pollingError: "Job cancelled: Exceeded 60 seconds in queue.",
-                  inQueueSince: null,
-                });
-              } else {
-                storeActions.updateImage(imageId, {
-                  isPolling: false,
-                  pollingError: `Queue timeout (>60s). Cancellation failed: ${cancelResult.error || "Unknown reason"}`,
-                  inQueueSince: null,
-                });
-              }
-              setTimeout(() => storeActions.processNextImage(), 2000);
-            });
+            Promise.resolve().then(() => handleRunpodQueueTimeout());
             return false; // Stop polling
           }
         }
@@ -237,6 +171,7 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
         storeActions.updateImage(imageId, { inQueueSince: null });
       }
 
+      // Stop polling if we've reached the maximum number of attempts
       if (query.state.dataUpdateCount + 1 >= MAX_POLLING_ATTEMPTS) {
         if (!currentData?.imageUrl) {
           Promise.resolve().then(() => {
@@ -250,86 +185,102 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
         }
         return false;
       }
+
+      // Continue polling with the specified interval
       return POLLING_INTERVAL;
     },
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: false,
-    retry: (failureCount: number, err: Error) => {
-      if (failureCount >= 2) return false;
-      return true;
-    },
+    retry: (failureCount: number) => failureCount < 2,
   });
 
-  useEffect(() => {
+  // Helper function to process successful polling results
+  const handlePollingSuccess = (data: PollImageStatusResponse) => {
+    if (!image) return;
+
     const storeActions = useImageUploadStore.getState();
-    if (data && image) {
-      if (data.imageUrl) {
-        storeActions.updateImage(imageId, {
-          enhancedImageUrl: data.imageUrl,
-          isPolling: false,
-        });
 
-        // Process next image in queue after a delay
-        setTimeout(() => {
-          storeActions.processNextImage();
-        }, 2000); // 2-second delay as specified in requirements
-      } else if (data.status === "COMPLETED" && !data.imageUrl) {
-        storeActions.updateImage(imageId, {
-          isPolling: false,
-          pollingError:
-            data.message ||
-            "Processing completed but no image URL was returned.",
-        });
-
-        // Process next image in queue after a delay
-        setTimeout(() => {
-          storeActions.processNextImage();
-        }, 2000);
-      } else if (data.status === "ERROR") {
-        storeActions.updateImage(imageId, {
-          isPolling: false,
-          pollingError:
-            data.error?.message ||
-            data.message ||
-            `Image processing failed with status: ${data.status}`,
-        });
-
-        // Process next image in queue after a delay
-        setTimeout(() => {
-          storeActions.processNextImage();
-        }, 2000);
-      } else if (
-        data.status &&
-        data.status !== "IN_PROGRESS" &&
-        data.status !== "IN_QUEUE" &&
-        data.status !== "COMPLETED"
-      ) {
-        storeActions.updateImage(imageId, {
-          isPolling: false,
-          pollingError:
-            data.error?.message ||
-            data.message ||
-            `Image processing ended with unexpected status: ${data.status}`,
-          inQueueSince: null,
-        });
-        setTimeout(() => storeActions.processNextImage(), 2000);
-      }
+    // Case 1: Image URL is available - processing completed successfully
+    if (data.imageUrl) {
+      storeActions.updateImage(imageId, {
+        enhancedImageUrl: data.imageUrl,
+        isPolling: false,
+      });
+      setTimeout(() => storeActions.processNextImage(), 2000);
+      return;
     }
-  }, [data, imageId, image]); // 'image' is included as a dependency for its properties used in this effect
 
-  useEffect(() => {
-    const storeActions = useImageUploadStore.getState();
-    if (error && image) {
-      // Check if image exists in hook state before trying to update
+    // Case 2: Status is COMPLETED but no image URL - something went wrong
+    if (data.status === "COMPLETED" && !data.imageUrl) {
       storeActions.updateImage(imageId, {
         isPolling: false,
         pollingError:
-          error.message || "An unknown error occurred during polling.",
+          data.message || "Processing completed but no image URL was returned.",
+      });
+      setTimeout(() => storeActions.processNextImage(), 2000);
+      return;
+    }
+
+    // Case 3: Status is ERROR - processing failed
+    if (data.status === "ERROR") {
+      storeActions.updateImage(imageId, {
+        isPolling: false,
+        pollingError:
+          data.error?.message ||
+          data.message ||
+          `Image processing failed with status: ${data.status}`,
+      });
+      setTimeout(() => storeActions.processNextImage(), 2000);
+      return;
+    }
+
+    // Case 4: Unexpected status
+    if (
+      data.status &&
+      data.status !== "IN_PROGRESS" &&
+      data.status !== "IN_QUEUE" &&
+      data.status !== "COMPLETED"
+    ) {
+      storeActions.updateImage(imageId, {
+        isPolling: false,
+        pollingError:
+          data.error?.message ||
+          data.message ||
+          `Image processing ended with unexpected status: ${data.status}`,
         inQueueSince: null,
       });
       setTimeout(() => storeActions.processNextImage(), 2000);
     }
-  }, [error, imageId, image]); // 'image' is included as a dependency
+  };
+
+  // Helper function to handle polling errors
+  const handlePollingError = (error: Error) => {
+    if (!image) return;
+
+    const storeActions = useImageUploadStore.getState();
+    storeActions.updateImage(imageId, {
+      isPolling: false,
+      pollingError:
+        error.message || "An unknown error occurred during polling.",
+      inQueueSince: null,
+    });
+
+    setTimeout(() => storeActions.processNextImage(), 2000);
+  };
+
+  // React to data changes
+  useEffect(() => {
+    if (data && image) {
+      handlePollingSuccess(data);
+    }
+  }, [data, imageId, image]);
+
+  // React to error changes
+  useEffect(() => {
+    if (error && image) {
+      handlePollingError(error);
+    }
+  }, [error, imageId, image]);
 
   // Function to manually trigger the start of polling
   const initiatePolling = (statusUrl: string, providerName: string) => {

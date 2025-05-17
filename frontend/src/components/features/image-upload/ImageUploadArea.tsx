@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useState, useEffect } from "react";
-import { useDropzone } from "react-dropzone-esm";
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import {
   Card,
@@ -11,15 +10,13 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Download, Loader2, X } from "lucide-react";
 import { SelectedImageCompare } from "./ImageCompareResult";
 import { ImageProcessor } from "./ImageProcessor";
-import { ImageThumbnail } from "./ImageThumbnail";
 import { ImagePollingManager } from "./ImagePollingManager";
 import { acceptedFileTypes, MAX_IMAGES } from "./constants";
-import JSZip from "jszip";
+import { DropzoneUI, ImageThumbnailsGrid, UploadActionsFooter } from "./ui";
+import { useImageDownloader } from "@/hooks/useImageDownloader";
 
 export function ImageUploadArea() {
   const store = useImageUploadStore();
@@ -112,12 +109,7 @@ export function ImageUploadArea() {
     [store]
   );
 
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: acceptedFileTypes,
-    multiple: true,
-    maxFiles: MAX_IMAGES,
-  });
+  // We no longer need the useDropzone hook here as it's moved to DropzoneUI component
 
   const handleRemoveAll = () => {
     store.resetState();
@@ -145,65 +137,12 @@ export function ImageUploadArea() {
     toast.info("Ready for new images");
   };
 
-  // Handle downloading a single image
-  const downloadSingleImage = async (imageUrl: string, fileName: string) => {
-    try {
-      const response = await fetch(imageUrl);
-      const blob = await response.blob();
-
-      // Create a download link
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success("Image downloaded successfully");
-    } catch (error) {
-      console.error("Error downloading image:", error);
-      toast.error("Failed to download image");
-    }
-  };
-
-  // Handle downloading multiple images as a zip file
-  const downloadImagesAsZip = async (
-    images: Array<{ url: string; name: string }>
-  ) => {
-    try {
-      const zip = new JSZip();
-
-      // Add each image to the zip
-      const promises = images.map(async (image, index) => {
-        const response = await fetch(image.url);
-        const blob = await response.blob();
-        zip.file(image.name, blob);
-      });
-
-      // Wait for all images to be added to the zip
-      await Promise.all(promises);
-
-      // Generate the zip file
-      const zipBlob = await zip.generateAsync({ type: "blob" });
-
-      // Create a download link
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(zipBlob);
-      link.download = "enhanced-images.zip";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
-      toast.success("Images downloaded successfully");
-    } catch (error) {
-      console.error("Error creating zip file:", error);
-      toast.error("Failed to download images");
-    }
-  };
-
   // Handle the download button click
   const handleDownload = async () => {
     if (successfulImages.length === 0) return;
+
+    const { downloadSingleImage, downloadMultipleImagesAsZip } =
+      useImageDownloader();
 
     if (successfulImages.length === 1) {
       // Download single image
@@ -222,7 +161,7 @@ export function ImageUploadArea() {
           name: img.file.name.replace(/\.[^/.]+$/, "") + "-enhanced.jpg",
         }));
 
-      await downloadImagesAsZip(imagesToDownload);
+      await downloadMultipleImagesAsZip(imagesToDownload);
     }
   };
 
@@ -246,154 +185,41 @@ export function ImageUploadArea() {
 
         {/* Dropzone - Only show if not processing and not all images processed */}
         {!store.isProcessing && !allImagesProcessed && (
-          <div
-            {...getRootProps()}
-            className={`flex flex-col items-center justify-center p-8 border-2 border-dashed rounded-md cursor-pointer mb-4
-            ${isDragActive ? "border-primary bg-primary/10" : "border-border hover:border-primary/70"}
-            ${store.error ? "border-destructive" : ""}
-            transition-colors duration-200 ease-in-out`}
-          >
-            <input {...getInputProps()} />
-            {isDragActive ? (
-              <p className="text-primary">Drop the images here...</p>
-            ) : (
-              <div className="text-center">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  strokeWidth={1.5}
-                  stroke="currentColor"
-                  className="w-12 h-12 mx-auto mb-4 text-gray-400"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 16.5V9.75m0 0 3 3m-3-3-3 3M6.75 19.5a4.5 4.5 0 0 1-1.41-8.775 5.25 5.25 0 0 1 10.338 0 4.5 4.5 0 0 1-1.41 8.775H6.75Z"
-                  />
-                </svg>
-                <p className="mb-2 text-sm text-muted-foreground">
-                  <span className="font-semibold text-primary">
-                    Click to upload
-                  </span>{" "}
-                  or drag and drop
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  Multiple images (up to {MAX_IMAGES}) - JPEG, PNG, WEBP, GIF
-                </p>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Global Error Display */}
-        {store.error && (
-          <p className="mb-4 text-sm text-destructive text-center">
-            {store.error}
-          </p>
+          <DropzoneUI onDrop={onDrop} error={store.error} />
         )}
 
         {/* Image Thumbnails Grid */}
-        {store.images.length > 0 && (
-          <div className="mb-6">
-            <div className="flex justify-between items-center mb-2">
-              <h3 className="text-sm font-medium">
-                Images ({store.images.length})
-                {store.isProcessing && " - Processing..."}
-              </h3>
-              {/* Only show Remove All button if not all images processed */}
-              {!allImagesProcessed && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRemoveAll}
-                  className="text-xs"
-                >
-                  <X className="w-3 h-3 mr-1" /> Remove All
-                </Button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-2">
-              {store.images.map((image) => (
-                <ImageThumbnail
-                  key={image.id}
-                  image={image}
-                  isSelected={image.id === store.selectedImageId}
-                  onClick={() => store.selectImage(image.id)}
-                  onRemove={() => store.removeImage(image.id)}
-                  isProcessing={store.isProcessing}
-                />
-              ))}
-            </div>
-          </div>
-        )}
+        <ImageThumbnailsGrid
+          images={store.images}
+          selectedImageId={store.selectedImageId}
+          isProcessing={store.isProcessing}
+          allImagesProcessed={allImagesProcessed}
+          onSelectImage={(id) => store.selectImage(id)}
+          onRemoveImage={(id) => store.removeImage(id)}
+          onRemoveAll={handleRemoveAll}
+        />
 
         {/* Selected Image Comparison */}
         <SelectedImageCompare />
       </CardContent>
 
       <CardFooter className="flex flex-col items-center gap-4 pt-4">
-        {!store.isProcessing && (
-          <>
-            {/* Show "Start New Session" button if all images are processed */}
-            {allImagesProcessed ? (
-              <div className="flex flex-col w-full items-center gap-3">
-                {/* Show Download button if there are successful images */}
-                {showDownloadButton && (
-                  <Button
-                    onClick={handleDownload}
-                    variant="outline"
-                    className="w-full max-w-xs cursor-pointer flex items-center gap-2"
-                  >
-                    <Download className="w-4 h-4" />
-                    Download {successfulImages.length > 1 ? "Images" : "Image"}
-                  </Button>
-                )}
-                <Button
-                  onClick={handleStartNewSession}
-                  className="w-full max-w-xs cursor-pointer"
-                >
-                  Start New Session
-                </Button>
-              </div>
-            ) : (
-              <>
-                {/* Show "Select Images" button if no images are selected */}
-                {store.images.length === 0 ? (
-                  <Button
-                    onClick={() => {
-                      const inputElement =
-                        document.querySelector('input[type="file"]');
-                      if (inputElement instanceof HTMLElement) {
-                        inputElement.click();
-                      }
-                    }}
-                    className="w-full max-w-xs cursor-pointer"
-                  >
-                    Select Images to Start
-                  </Button>
-                ) : (
-                  /* Show "Enhance Images" button if images are selected but not yet processing */
-                  <Button
-                    onClick={handleEnhanceImages}
-                    className="w-full max-w-xs cursor-pointer"
-                  >
-                    Enhance {store.images.length > 1 ? "Images" : "Image"}
-                  </Button>
-                )}
-              </>
-            )}
-          </>
-        )}
-
-        {/* Show processing status when active */}
-        {store.isProcessing && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span>Processing images...</span>
-          </div>
-        )}
+        <UploadActionsFooter
+          isProcessing={store.isProcessing}
+          allImagesProcessed={allImagesProcessed}
+          showDownloadButton={showDownloadButton}
+          imagesCount={store.images.length}
+          successfulImagesCount={successfulImages.length}
+          onEnhanceImages={handleEnhanceImages}
+          onDownload={handleDownload}
+          onStartNewSession={handleStartNewSession}
+          onSelectImages={() => {
+            const inputElement = document.querySelector('input[type="file"]');
+            if (inputElement instanceof HTMLElement) {
+              inputElement.click();
+            }
+          }}
+        />
       </CardFooter>
     </Card>
   );

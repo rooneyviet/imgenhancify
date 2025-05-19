@@ -14,20 +14,31 @@ interface FalStatusResponse {
 }
 
 export class FalPollingProvider implements PollingProvider {
-  public async checkStatus(
-    statusUrl: string,
-    apiKey: string
-  ): Promise<PollingStatusResponse> {
-    if (!apiKey) {
-      console.error("Fal API key is missing.");
-      return { status: "FAILED", error: "Fal API key is missing." };
+  private apiKey: string | undefined;
+
+  constructor() {
+    this.apiKey = process.env.FAL_API_KEY;
+    console.log(
+      `[FalPollingProvider] Initialized. FAL_API_KEY from env: ${this.apiKey ? "found (" + this.apiKey.substring(0, 5) + "...)" : "NOT FOUND"}`
+    );
+  }
+
+  public async checkStatus(statusUrl: string): Promise<PollingStatusResponse> {
+    if (!this.apiKey) {
+      console.error(
+        "[FalPollingProvider] CRITICAL: FAL_API_KEY is not configured or not accessible in environment variables."
+      );
+      return {
+        status: "FAILED",
+        error: "FAL_API_KEY is not configured for the server.",
+      };
     }
 
     try {
       const response = await fetch(statusUrl, {
         method: "GET",
         headers: {
-          Authorization: `Key ${apiKey}`,
+          Authorization: `Key ${this.apiKey}`,
           "Content-Type": "application/json",
         },
       });
@@ -70,10 +81,14 @@ export class FalPollingProvider implements PollingProvider {
     }
   }
 
-  public async getResult(
-    responseData: any,
-    apiKey: string
-  ): Promise<ImageResult> {
+  public async getResult(responseData: any): Promise<ImageResult> {
+    if (!this.apiKey) {
+      console.error(
+        "[FalPollingProvider] CRITICAL: FAL_API_KEY is not configured or not accessible in environment variables for getResult."
+      );
+      throw new Error("FAL_API_KEY is not configured for the server.");
+    }
+
     // responseData here is falResponse from checkStatus (result of calling status_url)
     const falInitialStatusResponse = responseData as FalStatusResponse;
 
@@ -95,21 +110,11 @@ export class FalPollingProvider implements PollingProvider {
         `[FalPollingProvider] Status COMPLETED. Fetching final result from: ${finalResultUrl}`
       );
 
-      if (!apiKey) {
-        // This should not happen if the API route passes the apiKey
-        console.error(
-          "[FalPollingProvider] API key is missing in getResult, cannot fetch final result URL."
-        );
-        throw new Error(
-          "API key missing, cannot fetch final result from Fal.ai."
-        );
-      }
-
       try {
         const finalResponse = await fetch(finalResultUrl, {
           method: "GET",
           headers: {
-            Authorization: `Key ${apiKey}`,
+            Authorization: `Key ${this.apiKey}`,
             Accept: "application/json", // Request JSON response
           },
         });

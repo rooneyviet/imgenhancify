@@ -16,19 +16,31 @@ interface RunpodStatusResponse {
 }
 
 export class RunpodPollingProvider implements PollingProvider {
+  private apiKey: string | undefined;
+
+  constructor() {
+    this.apiKey = process.env.RUNPOD_API_KEY;
+    console.log(
+      `[RunpodPollingProvider] Initialized. RUNPOD_API_KEY from env: ${this.apiKey ? "found (" + this.apiKey.substring(0, 5) + "...)" : "NOT FOUND"}`
+    );
+  }
+
   /**
    * Cancels a Runpod job that is currently in the IN_QUEUE status
    * @param statusUrl The status URL of the job to cancel
-   * @param apiKey The Runpod API key
    * @returns Promise with success status and optional error message
    */
   public async cancelJob(
-    statusUrl: string,
-    apiKey: string
+    statusUrl: string
   ): Promise<{ success: boolean; error?: string }> {
-    if (!apiKey) {
-      console.error("Runpod API key is missing for cancellation.");
-      return { success: false, error: "Runpod API key is missing." };
+    if (!this.apiKey) {
+      console.error(
+        "[RunpodPollingProvider] CRITICAL: RUNPOD_API_KEY is not configured or not accessible in environment variables for cancellation."
+      );
+      return {
+        success: false,
+        error: "RUNPOD_API_KEY is not configured for the server.",
+      };
     }
 
     try {
@@ -61,7 +73,7 @@ export class RunpodPollingProvider implements PollingProvider {
       const response = await fetch(cancelUrl, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
         },
       });
@@ -98,13 +110,15 @@ export class RunpodPollingProvider implements PollingProvider {
       };
     }
   }
-  public async checkStatus(
-    statusUrl: string,
-    apiKey: string
-  ): Promise<PollingStatusResponse> {
-    if (!apiKey) {
-      console.error("Runpod API key is missing.");
-      return { status: "FAILED", error: "Runpod API key is missing." };
+  public async checkStatus(statusUrl: string): Promise<PollingStatusResponse> {
+    if (!this.apiKey) {
+      console.error(
+        "[RunpodPollingProvider] CRITICAL: RUNPOD_API_KEY is not configured or not accessible in environment variables."
+      );
+      return {
+        status: "FAILED",
+        error: "RUNPOD_API_KEY is not configured for the server.",
+      };
     }
 
     try {
@@ -113,7 +127,7 @@ export class RunpodPollingProvider implements PollingProvider {
       const response = await fetch(statusUrl, {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${apiKey}`,
+          Authorization: `Bearer ${this.apiKey}`,
           "Content-Type": "application/json",
         },
       });
@@ -163,10 +177,14 @@ export class RunpodPollingProvider implements PollingProvider {
     }
   }
 
-  public async getResult(
-    responseData: any,
-    apiKey: string
-  ): Promise<ImageResult> {
+  public async getResult(responseData: any): Promise<ImageResult> {
+    if (!this.apiKey) {
+      console.error(
+        "[RunpodPollingProvider] CRITICAL: RUNPOD_API_KEY is not configured or not accessible in environment variables for getResult."
+      );
+      throw new Error("RUNPOD_API_KEY is not configured for the server.");
+    }
+
     const runpodResponse = responseData as RunpodStatusResponse;
 
     if (!runpodResponse || typeof runpodResponse !== "object") {

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useMemo } from "react";
 import { useImageUploadStore } from "@/lib/store/imageUploadStore";
 import { useImagePolling } from "@/hooks/useImagePolling";
 
@@ -17,20 +17,17 @@ function SingleImagePoller({ imageId }: { imageId: string }) {
 }
 
 export function ImagePollingManager() {
-  const store = useImageUploadStore();
-  const [pollingImages, setPollingImages] = useState<string[]>([]);
+  const images = useImageUploadStore((state) => state.images);
 
-  // Find all images that need polling
-  useEffect(() => {
-    const imagesToPoll = store.images
+  // Find all images that need polling using useMemo
+  const pollingImages = useMemo(() => {
+    return images
       .filter(
         (img) =>
           img.isPolling && img.pollingStatusUrl && img.pollingProviderName
       )
       .map((img) => img.id);
-
-    setPollingImages(imagesToPoll);
-  }, [store.images]);
+  }, [images]);
 
   // Render a separate component for each image that needs polling
   // This follows React's pattern for rendering dynamic lists

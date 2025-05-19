@@ -9,13 +9,23 @@ import {
 } from "@/services/apiService/PollingService";
 
 const POLLING_INTERVAL = 3000;
-const MAX_POLLING_ATTEMPTS = 20;
+const MAX_POLLING_ATTEMPTS = 50;
 
 interface UseImagePollingProps {
   imageId: string;
 }
 
-export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
+export interface UseImagePollingReturn {
+  initiatePolling: (statusUrl: string, providerName: string) => void;
+  isPollingQueryLoading: boolean;
+  pollingData: PollImageStatusResponse | undefined;
+  pollingQueryError: Error | null;
+  image: ImageItem | undefined;
+}
+
+export const useImagePolling = ({
+  imageId,
+}: UseImagePollingProps): UseImagePollingReturn => {
   const store = useImageUploadStore();
   const [image, setImage] = useState<ImageItem | undefined>(
     store.images.find((img) => img.id === imageId)
@@ -126,6 +136,11 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
     ) => {
       const currentData = query.state.data;
       const storeActions = useImageUploadStore.getState();
+      const currentAttempt = query.state.dataUpdateCount + 1;
+
+      console.log(
+        `[useImagePolling] Image ID: ${imageId}, Polling attempt: ${currentAttempt} of ${MAX_POLLING_ATTEMPTS}. Current status: ${currentData?.status || "fetching..."}`
+      );
 
       // Stop polling if image is not available
       if (!image) {
@@ -148,31 +163,8 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
         return false;
       }
 
-      // Handle Runpod IN_QUEUE status
-      if (
-        currentData?.status === "IN_QUEUE" &&
-        image.pollingProviderName?.toLowerCase() === "runpod"
-      ) {
-        if (image.inQueueSince === null) {
-          storeActions.updateImage(imageId, { inQueueSince: Date.now() });
-        } else {
-          const timeSpentInQueue = Date.now() - image.inQueueSince;
-          if (timeSpentInQueue > 60000) {
-            // 60 seconds
-            Promise.resolve().then(() => handleRunpodQueueTimeout());
-            return false; // Stop polling
-          }
-        }
-      } else if (
-        image.inQueueSince !== null &&
-        currentData?.status !== "IN_QUEUE"
-      ) {
-        // If status is no longer IN_QUEUE (and it was previously), reset the timer
-        storeActions.updateImage(imageId, { inQueueSince: null });
-      }
-
       // Stop polling if we've reached the maximum number of attempts
-      if (query.state.dataUpdateCount + 1 >= MAX_POLLING_ATTEMPTS) {
+      if (currentAttempt >= MAX_POLLING_ATTEMPTS) {
         if (!currentData?.imageUrl) {
           Promise.resolve().then(() => {
             storeActions.updateImage(imageId, {
@@ -189,7 +181,7 @@ export const useImagePolling = ({ imageId }: UseImagePollingProps) => {
       // Continue polling with the specified interval
       return POLLING_INTERVAL;
     },
-    refetchIntervalInBackground: false,
+    refetchIntervalInBackground: true,
     refetchOnWindowFocus: false,
     retry: (failureCount: number) => failureCount < 2,
   });

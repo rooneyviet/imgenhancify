@@ -54,8 +54,8 @@ export function ImageCompareResult({
         <DynamicReactCompareImage
           leftImage={originalImageUrl}
           rightImage={enhancedImageUrl}
-          leftImageLabel="Original Image"
-          rightImageLabel="Processed Image"
+          leftImageLabel="Original"
+          rightImageLabel="Enhanced"
           sliderLineWidth={2}
           handleSize={40}
         />

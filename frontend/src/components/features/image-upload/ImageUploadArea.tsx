@@ -168,7 +168,7 @@ export function ImageUploadArea() {
       <CardHeader>
         <CardTitle>Enhance Image Quality</CardTitle>
         <CardDescription>
-          Upload up to {MAX_IMAGES} images to improve their quality using AI.
+          Upload up to {MAX_IMAGES} images to enhance their quality!
         </CardDescription>
       </CardHeader>
 

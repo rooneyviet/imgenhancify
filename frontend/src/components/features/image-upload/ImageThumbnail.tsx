@@ -64,9 +64,11 @@ export function ImageThumbnail({
   const showRemoveButton =
     !isProcessing &&
     !image.isUploading &&
+    !image.error &&
+    !image.pollingError &&
     !image.isEnhancing &&
     !image.isPolling &&
-    !image.enhancedImageUrl; // Hide remove button after image is processed
+    !image.enhancedImageUrl;
 
   return (
     <div
@@ -92,7 +94,7 @@ export function ImageThumbnail({
       {/* Remove button */}
       {showRemoveButton && (
         <button
-          className="absolute top-1 right-1 bg-red-500 rounded-full p-1 z-10 hover:bg-red-600 transition-colors"
+          className="absolute top-1 right-1 bg-red-300 rounded-full p-1 z-10 hover:bg-red-800 transition-colors"
           onClick={(e) => {
             e.stopPropagation(); // Prevent triggering the parent onClick
             onRemove();

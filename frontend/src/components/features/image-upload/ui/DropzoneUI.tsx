@@ -51,7 +51,7 @@ export function DropzoneUI({ onDrop, error }: DropzoneUIProps) {
               or drag and drop
             </p>
             <p className="text-xs text-muted-foreground">
-              Multiple images (up to {MAX_IMAGES}) - JPEG, PNG, WEBP, GIF
+              Multiple images (up to {MAX_IMAGES}) - JPEG, PNG, WEBP
             </p>
           </div>
         )}

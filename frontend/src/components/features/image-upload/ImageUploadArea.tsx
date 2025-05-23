@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useMemo } from "react";
-import { useImageUploadStore } from "@/lib/store/imageUploadStore";
+import { useImageUploadStore } from "@/lib/store/imageUploadStore"; // Already imported
 import {
   Card,
   CardContent,
@@ -24,6 +24,9 @@ export function ImageUploadArea() {
   const isProcessing = useImageUploadStore((state) => state.isProcessing);
   const error = useImageUploadStore((state) => state.error);
   const selectedImageId = useImageUploadStore((state) => state.selectedImageId);
+  const isDownloadingFiles = useImageUploadStore(
+    (state) => state.isDownloading
+  ); // Get from store
 
   const addImages = useImageUploadStore((state) => state.addImages);
   const removeImage = useImageUploadStore((state) => state.removeImage);
@@ -139,8 +142,11 @@ export function ImageUploadArea() {
     toast.info("Ready for new images");
   }, [resetState]);
 
-  const { downloadSingleImage, downloadMultipleImagesAsZip } =
-    useImageDownloader();
+  const {
+    // isDownloading is no longer returned by the hook
+    downloadSingleImage,
+    downloadMultipleImagesAsZip,
+  } = useImageDownloader();
 
   const handleDownload = useCallback(async () => {
     if (successfulImages.length === 0) return;
@@ -206,6 +212,7 @@ export function ImageUploadArea() {
           isProcessing={isProcessing}
           allImagesProcessed={allImagesProcessed}
           showDownloadButton={showDownloadButton}
+          isDownloading={isDownloadingFiles}
           imagesCount={images.length}
           successfulImagesCount={successfulImages.length}
           onEnhanceImages={handleEnhanceImages}

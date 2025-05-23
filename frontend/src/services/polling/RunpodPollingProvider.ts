@@ -201,7 +201,8 @@ export class RunpodPollingProvider implements PollingProvider {
       ) {
         // Extract the base64 image data and create a data URL
         const base64Data = runpodResponse.output.images[0].data;
-        const imageUrl = `data:image/png;base64,${base64Data}`;
+        //const imageUrl = `data:image/png;base64,${base64Data}`;
+        const imageUrl = `${base64Data}`;
         console.log(
           "[RunpodPollingProvider] Successfully extracted image data"
         );

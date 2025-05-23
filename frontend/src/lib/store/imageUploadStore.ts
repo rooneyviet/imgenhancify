@@ -24,6 +24,7 @@ interface ImageUploadState {
   selectedImageId: string | null; // ID of the currently selected image for comparison view
   error: string | null; // Global error state
   isProcessing: boolean; // Flag to indicate if any image is being processed
+  isDownloading: boolean; // Flag to indicate if images are currently being downloaded
 
   // Actions for multiple images
   addImages: (files: File[]) => void;
@@ -40,6 +41,7 @@ interface ImageUploadState {
   // Legacy actions (modified to work with multiple images)
   setError: (error: string | null) => void;
   startPolling: (id: string, statusUrl: string, providerName: string) => void;
+  setIsDownloading: (status: boolean) => void;
 }
 
 export const useImageUploadStore = create<ImageUploadState>((set, get) => ({
@@ -47,6 +49,7 @@ export const useImageUploadStore = create<ImageUploadState>((set, get) => ({
   selectedImageId: null,
   error: null,
   isProcessing: false,
+  isDownloading: false,
   isProcessingQueue: false,
   processingQueue: [],
 
@@ -188,6 +191,8 @@ export const useImageUploadStore = create<ImageUploadState>((set, get) => ({
       isProcessingQueue: false,
       processingQueue: [],
     }),
+
+  setIsDownloading: (status) => set({ isDownloading: status }),
 
   startPolling: (id, statusUrl, providerName) => {
     set((state) => ({

@@ -7,6 +7,7 @@ interface UploadActionsFooterProps {
   isProcessing: boolean;
   allImagesProcessed: boolean;
   showDownloadButton: boolean;
+  isDownloading: boolean;
   imagesCount: number;
   successfulImagesCount: number;
   onEnhanceImages: () => void;
@@ -19,6 +20,7 @@ export function UploadActionsFooter({
   isProcessing,
   allImagesProcessed,
   showDownloadButton,
+  isDownloading,
   imagesCount,
   successfulImagesCount,
   onEnhanceImages,
@@ -39,9 +41,16 @@ export function UploadActionsFooter({
                   onClick={onDownload}
                   variant="outline"
                   className="w-full max-w-xs cursor-pointer flex items-center gap-2"
+                  disabled={isDownloading}
                 >
-                  <Download className="w-4 h-4" />
-                  Download {successfulImagesCount > 1 ? "Images" : "Image"}
+                  {isDownloading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Download className="w-4 h-4" />
+                  )}
+                  {isDownloading
+                    ? "Downloading..."
+                    : `Download ${successfulImagesCount > 1 ? "Images" : "Image"}`}
                 </Button>
               )}
               <Button

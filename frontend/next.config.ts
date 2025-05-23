@@ -36,6 +36,12 @@ const nextConfig: NextConfig = {
         port: "",
         pathname: "/**",
       },
+      {
+        protocol: "https",
+        hostname: "img-enhancify-8936253240943.s3.us-east-1.amazonaws.com",
+        port: "",
+        pathname: "/**",
+      },
     ],
   },
 };
